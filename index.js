@@ -11,7 +11,24 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 console.log('Environment variables loaded:');
 console.log('DISCORD_BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? 'Set' : 'Not set');
+console.log('DISCORD_CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? 'Set' : 'Not set');
 console.log('CONVEX_URL:', process.env.CONVEX_URL);
+console.log('LEAKOSINT_API_TOKEN:', process.env.LEAKOSINT_API_TOKEN ? 'Set' : 'Not set');
+
+if (!process.env.DISCORD_BOT_TOKEN) {
+  console.error('❌ DISCORD_BOT_TOKEN is required');
+  process.exit(1);
+}
+
+if (!process.env.DISCORD_CLIENT_ID) {
+  console.error('❌ DISCORD_CLIENT_ID is required');
+  process.exit(1);
+}
+
+if (!process.env.CONVEX_URL) {
+  console.error('❌ CONVEX_URL is required');
+  process.exit(1);
+}
 
 const client = new Client({
   intents: [
@@ -61,14 +78,15 @@ const commands = [
     .setDescription('Show help information'),
 ].map(command => command.toJSON());
 
-// Register slash commands
+// Register slash commands globally
 async function registerCommands() {
   try {
     const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN);
     console.log('Started refreshing application (/) commands.');
 
+    // Register commands globally (not guild-specific)
     await rest.put(
-      Routes.applicationCommands(client.user.id),
+      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
       { body: commands },
     );
 
@@ -80,6 +98,11 @@ async function registerCommands() {
 
 client.once('ready', async () => {
   console.log(`✅ Discord bot logged in as ${client.user.tag}!`);
+  console.log(`Bot is in ${client.guilds.cache.size} guilds`);
+  
+  // Set bot status
+  client.user.setActivity('🔍 Searching breaches', { type: 'WATCHING' });
+  
   await registerCommands();
 });
 
@@ -95,12 +118,16 @@ client.on('interactionCreate', async interaction => {
       const query = options.getString('query');
       const limit = options.getInteger('limit') || 100;
 
+      console.log(`Search command: query="${query}", limit=${limit}`);
+
       try {
         // Call your existing Convex action
         const result = await convex.action('breaches:searchBreaches', {
           query,
           limit,
         });
+
+        console.log(`Search result: ${result.resultCount} results found`);
 
         // Get the results
         const searchResults = await convex.query('breaches:getSearchResults', {
@@ -142,6 +169,7 @@ client.on('interactionCreate', async interaction => {
         });
 
       } catch (error) {
+        console.error('Search error:', error);
         await interaction.editReply({
           content: `❌ Search failed: ${error.message || "Unknown error"}`,
         });
@@ -179,31 +207,39 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'stats') {
-      const stats = await convex.query('bots:getBotStats');
+      try {
+        const stats = await convex.query('bots:getBotStats');
 
-      const embed = new EmbedBuilder()
-        .setTitle("📊 Bot Statistics")
-        .setColor(0x10B981)
-        .addFields(
-          {
-            name: "Total Searches",
-            value: stats.totalSearches.toString(),
-            inline: true,
-          },
-          {
-            name: "Total Results Found",
-            value: stats.totalResults.toString(),
-            inline: true,
-          }
-        )
-        .setFooter({
-          text: "Majic Breaches Bot",
+        const embed = new EmbedBuilder()
+          .setTitle("📊 Bot Statistics")
+          .setColor(0x10B981)
+          .addFields(
+            {
+              name: "Total Searches",
+              value: stats.totalSearches.toString(),
+              inline: true,
+            },
+            {
+              name: "Total Results Found",
+              value: stats.totalResults.toString(),
+              inline: true,
+            }
+          )
+          .setFooter({
+            text: "Majic Breaches Bot",
+          });
+
+        await interaction.reply({
+          embeds: [embed],
+          ephemeral: true,
         });
-
-      await interaction.reply({
-        embeds: [embed],
-        ephemeral: true,
-      });
+      } catch (error) {
+        console.error('Stats error:', error);
+        await interaction.reply({
+          content: "❌ Failed to fetch statistics",
+          ephemeral: true,
+        });
+      }
     }
 
   } catch (error) {
@@ -216,6 +252,19 @@ client.on('interactionCreate', async interaction => {
       await interaction.reply({ content: errorMessage, ephemeral: true });
     }
   }
+});
+
+// Handle process termination gracefully
+process.on('SIGINT', () => {
+  console.log('Received SIGINT, shutting down gracefully...');
+  client.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM, shutting down gracefully...');
+  client.destroy();
+  process.exit(0);
 });
 
 // Login with error handling
