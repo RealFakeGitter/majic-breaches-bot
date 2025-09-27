@@ -9,6 +9,7 @@
     "dev:backend": "convex dev",
     "build": "vite build",
     "lint": "tsc -p convex -noEmit --pretty false && tsc -p . -noEmit --pretty false && convex dev --once && vite build",
+    "start": "vite preview --host 0.0.0.0 --port $PORT",
     "discord-bot": "node discord-bot/index.js",
     "revolt-bot": "node revolt-bot/index.js"
   },
