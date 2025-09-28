@@ -122,6 +122,14 @@ client.on('interactionCreate', async interaction => {
           { name: 'limit', value: limit }
         ];
 
+        console.log('Calling Convex action with:', {
+          commandName: 'search',
+          options: commandOptions,
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+        });
+
         const result = await convex.action('discord_bot:handleDiscordCommand', {
           commandName: 'search',
           options: commandOptions,
@@ -129,6 +137,8 @@ client.on('interactionCreate', async interaction => {
           channelId: interaction.channelId,
           guildId: interaction.guildId,
         });
+
+        console.log('Convex action result:', result);
 
         // The result contains the Discord response format
         if (result.data && result.data.content) {
