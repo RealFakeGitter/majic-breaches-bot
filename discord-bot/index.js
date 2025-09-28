@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActivityType } from 'discord.js';
 import { ConvexHttpClient } from 'convex/browser';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -13,7 +13,6 @@ console.log('Environment variables loaded:');
 console.log('DISCORD_BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? 'Set' : 'Not set');
 console.log('DISCORD_CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? 'Set' : 'Not set');
 console.log('CONVEX_URL:', process.env.CONVEX_URL);
-console.log('LEAKOSINT_API_TOKEN:', process.env.LEAKOSINT_API_TOKEN ? 'Set' : 'Not set');
 
 if (!process.env.DISCORD_BOT_TOKEN) {
   console.error('❌ DISCORD_BOT_TOKEN is required');
@@ -47,10 +46,6 @@ client.on('error', (error) => {
 
 client.on('warn', (warning) => {
   console.warn('Discord client warning:', warning);
-});
-
-client.on('debug', (info) => {
-  console.log('Discord debug:', info);
 });
 
 // Define slash commands
@@ -100,8 +95,8 @@ client.once('ready', async () => {
   console.log(`✅ Discord bot logged in as ${client.user.tag}!`);
   console.log(`Bot is in ${client.guilds.cache.size} guilds`);
   
-  // Set bot status
-  client.user.setActivity('🔍 Searching breaches', { type: 'WATCHING' });
+  // Set bot status - Updated for Discord.js v14
+  client.user.setActivity('🔍 Searching breaches', { type: ActivityType.Watching });
   
   await registerCommands();
 });
@@ -141,10 +136,11 @@ client.on('interactionCreate', async interaction => {
           return;
         }
 
-        // Format results for Discord
-        const resultText = searchResults.results.slice(0, 5).map((result, index) => {
-          const truncatedContent = result.content.length > 200 
-            ? result.content.substring(0, 200) + "..." 
+        // Format results for Discord - limit to prevent message size issues
+        const maxResults = Math.min(5, searchResults.results.length);
+        const resultText = searchResults.results.slice(0, maxResults).map((result, index) => {
+          const truncatedContent = result.content.length > 150 
+            ? result.content.substring(0, 150) + "..." 
             : result.content;
           
           return `**${index + 1}. ${result.breachName}**\n` +
@@ -152,13 +148,17 @@ client.on('interactionCreate', async interaction => {
                  `\`\`\`\n${truncatedContent}\n\`\`\``;
         }).join("\n\n");
 
+        // Ensure the embed doesn't exceed Discord's limits
+        const description = `Found ${result.resultCount} total results. Showing first ${maxResults}:`;
+        const truncatedResultText = resultText.length > 3500 ? resultText.substring(0, 3500) + "..." : resultText;
+
         const embed = new EmbedBuilder()
-          .setTitle(`🔍 Search Results for "${query}"`)
-          .setDescription(`Found ${result.resultCount} total results. Showing first 5:`)
+          .setTitle(`🔍 Search Results for "${query.length > 50 ? query.substring(0, 50) + "..." : query}"`)
+          .setDescription(description)
           .setColor(0x3B82F6)
           .addFields({
             name: "Results",
-            value: resultText.length > 4000 ? resultText.substring(0, 4000) + "..." : resultText,
+            value: truncatedResultText || "No results to display",
           })
           .setFooter({
             text: `Total: ${result.resultCount} results | Use with caution - for educational purposes only`,
@@ -216,12 +216,12 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             {
               name: "Total Searches",
-              value: stats.totalSearches.toString(),
+              value: stats.totalSearches.toLocaleString(),
               inline: true,
             },
             {
               name: "Total Results Found",
-              value: stats.totalResults.toString(),
+              value: stats.totalResults.toLocaleString(),
               inline: true,
             }
           )
