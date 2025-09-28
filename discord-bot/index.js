@@ -116,57 +116,30 @@ client.on('interactionCreate', async interaction => {
       console.log(`Search command: query="${query}", limit=${limit}`);
 
       try {
-        // Call your existing Convex action
-        const result = await convex.action('breaches.searchBreaches', {
-          query,
-          limit,
+        // Use the dedicated Discord command handler
+        const commandOptions = [
+          { name: 'query', value: query },
+          { name: 'limit', value: limit }
+        ];
+
+        const result = await convex.action('discord_bot:handleDiscordCommand', {
+          commandName: 'search',
+          options: commandOptions,
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
         });
 
-        console.log(`Search result: ${result.resultCount} results found`);
-
-        // Get the results
-        const searchResults = await convex.query('breaches.getSearchResults', {
-          searchId: result.searchId,
-        });
-
-        if (!searchResults || searchResults.results.length === 0) {
+        // The result contains the Discord response format
+        if (result.data && result.data.content) {
           await interaction.editReply({
-            content: `❌ No results found for "${query}"`,
+            content: result.data.content,
           });
-          return;
+        } else {
+          await interaction.editReply({
+            content: "❌ Unexpected response format",
+          });
         }
-
-        // Format results for Discord - limit to prevent message size issues
-        const maxResults = Math.min(5, searchResults.results.length);
-        const resultText = searchResults.results.slice(0, maxResults).map((result, index) => {
-          const truncatedContent = result.content.length > 150 
-            ? result.content.substring(0, 150) + "..." 
-            : result.content;
-          
-          return `**${index + 1}. ${result.breachName}**\n` +
-                 `Match: \`${result.matchedField}\`\n` +
-                 `\`\`\`\n${truncatedContent}\n\`\`\``;
-        }).join("\n\n");
-
-        // Ensure the embed doesn't exceed Discord's limits
-        const description = `Found ${result.resultCount} total results. Showing first ${maxResults}:`;
-        const truncatedResultText = resultText.length > 3500 ? resultText.substring(0, 3500) + "..." : resultText;
-
-        const embed = new EmbedBuilder()
-          .setTitle(`🔍 Search Results for "${query.length > 50 ? query.substring(0, 50) + "..." : query}"`)
-          .setDescription(description)
-          .setColor(0x3B82F6)
-          .addFields({
-            name: "Results",
-            value: truncatedResultText || "No results to display",
-          })
-          .setFooter({
-            text: `Total: ${result.resultCount} results | Use with caution - for educational purposes only`,
-          });
-
-        await interaction.editReply({
-          embeds: [embed],
-        });
 
       } catch (error) {
         console.error('Search error:', error);
@@ -177,60 +150,40 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'help') {
-      const embed = new EmbedBuilder()
-        .setTitle("🔍 Majic Breaches Bot")
-        .setDescription("Search across data breaches for security research purposes.")
-        .setColor(0x3B82F6)
-        .addFields(
-          {
-            name: "/search <query> [limit]",
-            value: "Search for breaches containing the specified query\n" +
-                   "Examples: `/search john@example.com`, `/search username123`",
-          },
-          {
-            name: "/stats",
-            value: "Show bot usage statistics",
-          },
-          {
-            name: "/help",
-            value: "Show this help message",
-          }
-        )
-        .setFooter({
-          text: "⚠️ For educational and security research purposes only",
+      try {
+        const result = await convex.action('discord_bot:handleDiscordCommand', {
+          commandName: 'help',
+          options: [],
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
         });
 
-      await interaction.reply({
-        embeds: [embed],
-        ephemeral: true,
-      });
+        await interaction.reply({
+          content: result.data.content,
+          ephemeral: true,
+        });
+      } catch (error) {
+        console.error('Help error:', error);
+        await interaction.reply({
+          content: "❌ Failed to show help",
+          ephemeral: true,
+        });
+      }
     }
 
     if (commandName === 'stats') {
       try {
-        const stats = await convex.query('bots.getBotStats');
-
-        const embed = new EmbedBuilder()
-          .setTitle("📊 Bot Statistics")
-          .setColor(0x10B981)
-          .addFields(
-            {
-              name: "Total Searches",
-              value: stats.totalSearches.toLocaleString(),
-              inline: true,
-            },
-            {
-              name: "Total Results Found",
-              value: stats.totalResults.toLocaleString(),
-              inline: true,
-            }
-          )
-          .setFooter({
-            text: "Majic Breaches Bot",
-          });
+        const result = await convex.action('discord_bot:handleDiscordCommand', {
+          commandName: 'stats',
+          options: [],
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+        });
 
         await interaction.reply({
-          embeds: [embed],
+          content: result.data.content,
           ephemeral: true,
         });
       } catch (error) {
