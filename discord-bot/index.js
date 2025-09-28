@@ -122,8 +122,7 @@ client.on('interactionCreate', async interaction => {
 
       try {
         // Call your existing Convex action
-       const result = await convex.action('breaches.searchBreaches', {
-
+        const result = await convex.action('breaches.searchBreaches', {
           query,
           limit,
         });
@@ -132,7 +131,6 @@ client.on('interactionCreate', async interaction => {
 
         // Get the results
         const searchResults = await convex.query('breaches.getSearchResults', {
-
           searchId: result.searchId,
         });
 
@@ -210,8 +208,7 @@ client.on('interactionCreate', async interaction => {
 
     if (commandName === 'stats') {
       try {
-       const stats = await convex.query('bots.getBotStats');
-
+        const stats = await convex.query('bots.getBotStats');
 
         const embed = new EmbedBuilder()
           .setTitle("📊 Bot Statistics")
