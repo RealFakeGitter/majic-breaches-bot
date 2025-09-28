@@ -122,7 +122,8 @@ client.on('interactionCreate', async interaction => {
 
       try {
         // Call your existing Convex action
-        const result = await convex.action('breaches:searchBreaches', {
+       const result = await convex.action('breaches.searchBreaches', {
+
           query,
           limit,
         });
