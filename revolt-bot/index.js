@@ -89,7 +89,7 @@ client.on('messageCreate', async (message) => {
             content: content,
             authorId: actualAuthorId,
             channelId: message.channel_id || message.channel?.id || "unknown",
-            serverId: message.channel?.server_id || null,
+            serverId: message.channel?.server_id || undefined,
           });
 
           if (!result) {
@@ -132,7 +132,7 @@ client.on('messageCreate', async (message) => {
           content: content,
           authorId: actualAuthorId,
           channelId: message.channel_id || message.channel?.id || "unknown",
-          serverId: message.channel?.server_id || null,
+          serverId: message.channel?.server_id || undefined,
         });
 
         await message.reply({
@@ -145,7 +145,7 @@ client.on('messageCreate', async (message) => {
           content: content,
           authorId: actualAuthorId,
           channelId: message.channel_id || message.channel?.id || "unknown",
-          serverId: message.channel?.server_id || null,
+          serverId: message.channel?.server_id || undefined,
         });
 
         await message.reply({
@@ -158,7 +158,7 @@ client.on('messageCreate', async (message) => {
           content: content,
           authorId: actualAuthorId,
           channelId: message.channel_id || message.channel?.id || "unknown",
-          serverId: message.channel?.server_id || null,
+          serverId: message.channel?.server_id || undefined,
         });
 
         await message.reply({
