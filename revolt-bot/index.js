@@ -38,10 +38,22 @@ client.on('messageCreate', async (message) => {
     console.log('Channel ID:', message.channel_id);
     console.log('Bot user ID:', client.user?._id);
     
-    // Ignore messages from the bot itself
-    if (message.author_id === client.user?._id) {
+    // Ignore messages from the bot itself (with better checking)
+    console.log('🔍 Checking if message is from bot...');
+    console.log('- message.author_id:', message.author_id);
+    console.log('- client.user?._id:', client.user?._id);
+    console.log('- message.author:', message.author);
+    
+    // Skip self-check if we can't determine the bot's ID
+    if (client.user?._id && message.author_id === client.user._id) {
       console.log('🤖 Ignoring message from bot itself');
       return;
+    }
+    
+    // Additional check: if author_id is undefined, it might be a system message
+    if (!message.author_id) {
+      console.log('⚠️ Message has no author_id, might be system message');
+      // Don't return here, let's process it anyway for debugging
     }
 
     const content = message.content?.trim();
@@ -93,8 +105,8 @@ client.on('messageCreate', async (message) => {
         // Call the Convex action for Revolt commands
         const result = await convex.action('revolt_bot.handleRevoltCommand', {
           content: content,
-          authorId: message.author_id,
-          channelId: message.channel_id,
+          authorId: message.author_id || 'unknown',
+          channelId: message.channel_id || 'unknown',
           serverId: message.channel?.server_id || null,
         });
 
@@ -140,8 +152,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'help') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id,
-        channelId: message.channel_id,
+        authorId: message.author_id || 'unknown',
+        channelId: message.channel_id || 'unknown',
         serverId: message.channel?.server_id || null,
       });
 
@@ -153,8 +165,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'stats') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id,
-        channelId: message.channel_id,
+        authorId: message.author_id || 'unknown',
+        channelId: message.channel_id || 'unknown',
         serverId: message.channel?.server_id || null,
       });
 
@@ -166,8 +178,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'test') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id,
-        channelId: message.channel_id,
+        authorId: message.author_id || 'unknown',
+        channelId: message.channel_id || 'unknown',
         serverId: message.channel?.server_id || null,
       });
 
