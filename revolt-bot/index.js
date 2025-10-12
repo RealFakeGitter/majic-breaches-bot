@@ -106,7 +106,7 @@ client.on('messageCreate', async (message) => {
 
       try {
         // Call the Convex action for Revolt commands
-        const result = await convex.action('revolt_bot.handleRevoltCommand', {
+       const result = await convex.action('revolt_bot.handleRevoltCommand', {
           content: content,
           authorId: actualAuthorId,
           channelId: message.channel_id,
@@ -153,7 +153,7 @@ client.on('messageCreate', async (message) => {
     }
 
     else if (command === 'help') {
-      const result = await convex.action('revolt_bot.handleRevoltCommand', {
+      const result = await convex.action('revolt_bot.handleRevoltCommandNew', {
         content: content,
         authorId: actualAuthorId,
         channelId: message.channel_id,
@@ -166,7 +166,7 @@ client.on('messageCreate', async (message) => {
     }
 
     else if (command === 'stats') {
-      const result = await convex.action('revolt_bot.handleRevoltCommand', {
+      const result = await convex.action('revolt_bot.handleRevoltCommandNew', {
         content: content,
         authorId: actualAuthorId,
         channelId: message.channel_id,
@@ -179,7 +179,7 @@ client.on('messageCreate', async (message) => {
     }
 
     else if (command === 'test') {
-      const result = await convex.action('revolt_bot.handleRevoltCommand', {
+      cconst result = await convex.action('revolt_bot.handleRevoltCommandNew', {
         content: content,
         authorId: actualAuthorId,
         channelId: message.channel_id,
