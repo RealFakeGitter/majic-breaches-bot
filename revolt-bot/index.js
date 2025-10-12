@@ -88,7 +88,7 @@ client.on('messageCreate', async (message) => {
           const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
             content: content,
             authorId: actualAuthorId,
-            channelId: message.channel_id,
+            channelId: message.channel_id || message.channel?.id || "unknown",
             serverId: message.channel?.server_id || null,
           });
 
@@ -131,7 +131,7 @@ client.on('messageCreate', async (message) => {
         const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
           content: content,
           authorId: actualAuthorId,
-          channelId: message.channel_id,
+          channelId: message.channel_id || message.channel?.id || "unknown",
           serverId: message.channel?.server_id || null,
         });
 
@@ -144,7 +144,7 @@ client.on('messageCreate', async (message) => {
         const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
           content: content,
           authorId: actualAuthorId,
-          channelId: message.channel_id,
+          channelId: message.channel_id || message.channel?.id || "unknown",
           serverId: message.channel?.server_id || null,
         });
 
@@ -157,7 +157,7 @@ client.on('messageCreate', async (message) => {
         const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
           content: content,
           authorId: actualAuthorId,
-          channelId: message.channel_id,
+          channelId: message.channel_id || message.channel?.id || "unknown",
           serverId: message.channel?.server_id || null,
         });
 
