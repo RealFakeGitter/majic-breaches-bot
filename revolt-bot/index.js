@@ -34,26 +34,29 @@ client.on('ready', async () => {
 client.on('messageCreate', async (message) => {
   console.log('📨 MESSAGE_CREATE EVENT FIRED - MAIN HANDLER!');
   try {
-    console.log(`📨 Message received: "${message.content}" from ${message.author_id}`);
+    console.log(`📨 Message received: "${message.content}" from ${message.author_id || message.author?.id}`);
     console.log('Channel ID:', message.channel_id);
     console.log('Bot user ID:', client.user?._id);
     
     // Ignore messages from the bot itself (with better checking)
     console.log('🔍 Checking if message is from bot...');
     console.log('- message.author_id:', message.author_id);
+    console.log('- message.author?.id:', message.author?.id);
     console.log('- client.user?._id:', client.user?._id);
-    console.log('- message.author:', message.author);
+    
+    // Get the actual author ID (could be author_id or author.id)
+    const actualAuthorId = message.author_id || message.author?.id;
     
     // Skip self-check if we can't determine the bot's ID
-    if (client.user?._id && message.author_id === client.user._id) {
+    if (client.user?._id && actualAuthorId === client.user._id) {
       console.log('🤖 Ignoring message from bot itself');
       return;
     }
     
-    // Additional check: if author_id is undefined, it might be a system message
-    if (!message.author_id) {
-      console.log('⚠️ Message has no author_id, might be system message');
-      // Don't return here, let's process it anyway for debugging
+    // Additional check: if no author ID found, it might be a system message
+    if (!actualAuthorId) {
+      console.log('⚠️ Message has no author ID, skipping');
+      return;
     }
 
     const content = message.content?.trim();
@@ -80,7 +83,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    console.log(`✅ Processing command: ${content} from ${message.author_id}`);
+    console.log(`✅ Processing command: ${content} from ${actualAuthorId}`);
 
   const parts = content.split(' ');
   const command = parts[1]?.toLowerCase();
@@ -105,8 +108,8 @@ client.on('messageCreate', async (message) => {
         // Call the Convex action for Revolt commands
         const result = await convex.action('revolt_bot.handleRevoltCommand', {
           content: content,
-          authorId: message.author_id || 'unknown',
-          channelId: message.channel_id || 'unknown',
+          authorId: actualAuthorId,
+          channelId: message.channel_id,
           serverId: message.channel?.server_id || null,
         });
 
@@ -152,8 +155,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'help') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id || 'unknown',
-        channelId: message.channel_id || 'unknown',
+        authorId: actualAuthorId,
+        channelId: message.channel_id,
         serverId: message.channel?.server_id || null,
       });
 
@@ -165,8 +168,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'stats') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id || 'unknown',
-        channelId: message.channel_id || 'unknown',
+        authorId: actualAuthorId,
+        channelId: message.channel_id,
         serverId: message.channel?.server_id || null,
       });
 
@@ -178,8 +181,8 @@ client.on('messageCreate', async (message) => {
     else if (command === 'test') {
       const result = await convex.action('revolt_bot.handleRevoltCommand', {
         content: content,
-        authorId: message.author_id || 'unknown',
-        channelId: message.channel_id || 'unknown',
+        authorId: actualAuthorId,
+        channelId: message.channel_id,
         serverId: message.channel?.server_id || null,
       });
 
