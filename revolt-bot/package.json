@@ -1,0 +1,19 @@
+{
+  "name": "majic-breaches-revolt-bot",
+  "version": "1.0.0",
+  "description": "Revolt bot for Majic Breaches data breach search",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "revolt.js": "^7.2.0",
+    "convex": "^1.27.1",
+    "dotenv": "^16.6.1",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
