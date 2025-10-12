@@ -1,122 +1,222 @@
 import { Client } from 'revolt.js';
 import { ConvexHttpClient } from 'convex/browser';
 import dotenv from 'dotenv';
+import fetch from 'node-fetch';
+import WebSocket from 'ws';
+
+// Polyfill WebSocket for Node.js environment
+global.WebSocket = WebSocket;
 
 dotenv.config();
+
+// Add some debugging
+console.log('🔧 Environment check:');
+console.log('- Node version:', process.version);
+console.log('- REVOLT_BOT_TOKEN exists:', !!process.env.REVOLT_BOT_TOKEN);
+console.log('- CONVEX_URL exists:', !!process.env.CONVEX_URL);
+console.log('- CONVEX_URL value:', process.env.CONVEX_URL);
 
 const client = new Client();
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 client.on('ready', async () => {
-  console.log(`✅ Revolt bot logged in as ${client.user.username}!`);
+  console.log(`✅ Revolt bot logged in as ${client.user?.username || client.user?.display_name || 'Unknown'}!`);
+  console.log(`Bot ID: ${client.user?._id}`);
 });
 
 client.on('message', async (message) => {
-  // Ignore messages from the bot itself
-  if (message.author_id === client.user._id) return;
-
-  const content = message.content?.trim();
-  if (!content || !content.startsWith('!breach')) return;
-
-  const parts = content.split(' ');
-  const command = parts[1]?.toLowerCase();
-
   try {
-    if (command === 'search') {
-      const query = parts.slice(2).join(' ');
-      
-      if (!query) {
-        await message.reply({
-          content: "❌ Please provide a search query!\nUsage: `!breach search <query>`",
-        });
-        return;
-      }
+    // Ignore messages from the bot itself
+    if (message.author_id === client.user?._id) return;
 
-      // Send initial "searching" message
-      const searchingMsg = await message.reply({
-        content: "🔍 Searching breaches...",
-      });
+    const content = message.content?.trim();
+    if (!content || !content.startsWith('!breach')) return;
 
-      try {
-        // Call your existing Convex action
-        const result = await convex.action('breaches:searchBreaches', {
-          query,
-          limit: 100,
-        });
+    console.log(`📨 Received command: ${content} from ${message.author_id}`);
 
-        // Get the results
-        const searchResults = await convex.query('breaches:getSearchResults', {
-          searchId: result.searchId,
-        });
+    const parts = content.split(' ');
+    const command = parts[1]?.toLowerCase();
 
-        if (!searchResults || searchResults.results.length === 0) {
-          await searchingMsg.edit({
-            content: `❌ No results found for "${query}"`,
+    try {
+      if (command === 'search') {
+        const query = parts.slice(2).join(' ');
+        
+        if (!query) {
+          await message.reply({
+            content: "❌ Please provide a search query!\nUsage: `!breach search <query>`",
           });
           return;
         }
 
-        // Format results for Revolt
-        const resultText = searchResults.results.slice(0, 3).map((result, index) => {
-          const truncatedContent = result.content.length > 150 
-            ? result.content.substring(0, 150) + "..." 
-            : result.content;
-          
-          return `**${index + 1}. ${result.breachName}**\n` +
-                 `Match: \`${result.matchedField}\`\n` +
-                 `\`\`\`\n${truncatedContent}\n\`\`\``;
-        }).join("\n\n");
-
-        await searchingMsg.edit({
-          content: `🔍 **Search Results for "${query}"**\n\n` +
-                   `Found ${result.resultCount} total results. Showing first 3:\n\n` +
-                   resultText +
-                   `\n\n⚠️ For educational purposes only`,
+        // Send initial "searching" message
+        const searchingMsg = await message.reply({
+          content: "🔍 Searching breaches...",
         });
 
-      } catch (error) {
-        await searchingMsg.edit({
-          content: `❌ Search failed: ${error.message || "Unknown error"}`,
+        try {
+          // Call the Convex action for Revolt commands
+          const result = await convex.action('revolt_bot.handleRevoltCommand', {
+            content: content,
+            authorId: message.author_id,
+            channelId: message.channel_id,
+            serverId: message.channel?.server_id || null,
+          });
+
+          if (!result) {
+            await searchingMsg.edit({
+              content: "❌ No response from search service",
+            });
+            return;
+          }
+
+          // If there's a file URL, download and upload it to Revolt
+          if (result.fileUrl && result.fileName) {
+            try {
+              // Download the file from Convex storage
+              const fileResponse = await fetch(result.fileUrl);
+              const fileBuffer = await fileResponse.buffer();
+
+              // Upload file to Revolt (this is a simplified approach)
+              // Note: Revolt file uploads require specific handling
+              await searchingMsg.edit({
+                content: result.content + "\n\n📎 **File download:** " + result.fileUrl,
+              });
+            } catch (fileError) {
+              console.error('File upload error:', fileError);
+              await searchingMsg.edit({
+                content: result.content,
+              });
+            }
+          } else {
+            await searchingMsg.edit({
+              content: result.content,
+            });
+          }
+
+        } catch (error) {
+          console.error('Search error:', error);
+          await searchingMsg.edit({
+            content: `❌ Search failed: ${error.message || "Unknown error"}`,
+          });
+        }
+      }
+
+      else if (command === 'help') {
+        const result = await convex.action('revolt_bot.handleRevoltCommand', {
+          content: content,
+          authorId: message.author_id,
+          channelId: message.channel_id,
+          serverId: message.channel?.server_id || null,
+        });
+
+        await message.reply({
+          content: result.content,
         });
       }
-    }
 
-    else if (command === 'help') {
-      await message.reply({
-        content: `🔍 **Majic Breaches Bot**\n\n` +
-                 `**Commands:**\n` +
-                 `\`!breach search <query>\` - Search for breaches\n` +
-                 `\`!breach stats\` - Show bot statistics\n` +
-                 `\`!breach help\` - Show this help message\n\n` +
-                 `**Examples:**\n` +
-                 `\`!breach search john@example.com\`\n` +
-                 `\`!breach search username123\`\n\n` +
-                 `⚠️ For educational and security research purposes only`,
-      });
-    }
+      else if (command === 'stats') {
+        const result = await convex.action('revolt_bot.handleRevoltCommand', {
+          content: content,
+          authorId: message.author_id,
+          channelId: message.channel_id,
+          serverId: message.channel?.server_id || null,
+        });
 
-    else if (command === 'stats') {
-      const stats = await convex.query('bots:getBotStats');
-      
-      await message.reply({
-        content: `📊 **Bot Statistics**\n\n` +
-                 `**Total Searches:** ${stats.totalSearches}\n` +
-                 `**Total Results Found:** ${stats.totalResults}`,
-      });
-    }
+        await message.reply({
+          content: result.content,
+        });
+      }
 
-    else {
-      await message.reply({
-        content: "❌ Unknown command. Use `!breach help` for available commands.",
-      });
-    }
+      else if (command === 'test') {
+        const result = await convex.action('revolt_bot.handleRevoltCommand', {
+          content: content,
+          authorId: message.author_id,
+          channelId: message.channel_id,
+          serverId: message.channel?.server_id || null,
+        });
 
-  } catch (error) {
-    console.error('Error handling message:', error);
-    await message.reply({
-      content: "❌ An error occurred while processing your request.",
-    });
+        await message.reply({
+          content: result.content,
+        });
+      }
+
+      else {
+        await message.reply({
+          content: "❌ Unknown command. Use `!breach help` for available commands.",
+        });
+      }
+
+    } catch (error) {
+      console.error('Error handling message:', error);
+      try {
+        await message.reply({
+          content: "❌ An error occurred while processing your request.",
+        });
+      } catch (replyError) {
+        console.error('Error sending error reply:', replyError);
+      }
+    }
+  } catch (outerError) {
+    console.error('Outer error in message handler:', outerError);
   }
 });
 
-client.loginBot(process.env.REVOLT_BOT_TOKEN);
+// Add error handling and connection events
+client.on('connecting', () => {
+  console.log('🔄 Connecting to Revolt...');
+});
+
+client.on('connected', () => {
+  console.log('🔗 Connected to Revolt!');
+});
+
+client.on('dropped', () => {
+  console.log('⚠️ Connection to Revolt dropped');
+});
+
+client.on('packet', (packet) => {
+  if (packet.type === 'Error') {
+    console.error('❌ Revolt error packet:', packet);
+  }
+});
+
+// Add process error handlers
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled promise rejection:', error);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
+  process.exit(1);
+});
+
+// Login with better error handling
+async function loginBot() {
+  try {
+    console.log('🚀 Starting Revolt bot login...');
+    
+    if (!process.env.REVOLT_BOT_TOKEN) {
+      throw new Error('REVOLT_BOT_TOKEN environment variable is not set');
+    }
+    
+    console.log('Token length:', process.env.REVOLT_BOT_TOKEN.length);
+    console.log('Token starts with:', process.env.REVOLT_BOT_TOKEN.substring(0, 10) + '...');
+    
+    const result = await client.loginBot(process.env.REVOLT_BOT_TOKEN);
+    console.log('✅ Login result:', result);
+    console.log('✅ Login successful!');
+  } catch (error) {
+    console.error('❌ Failed to login to Revolt:', error);
+    console.error('Error type:', typeof error);
+    console.error('Error constructor:', error.constructor.name);
+    if (error.response) {
+      console.error('HTTP Response:', error.response.status, error.response.statusText);
+    }
+    process.exit(1);
+  }
+}
+
+// Add a small delay before login to ensure everything is set up
+setTimeout(() => {
+  loginBot();
+}, 1000);
