@@ -30,9 +30,9 @@ client.on('ready', async () => {
   console.log('Client events:', client.eventNames ? client.eventNames() : 'No eventNames method');
 });
 
-// Try multiple event names for messages
-client.on('message', async (message) => {
-  console.log('📨 MESSAGE EVENT FIRED!');
+// Use messageCreate event (the correct one for Revolt.js)
+client.on('messageCreate', async (message) => {
+  console.log('📨 MESSAGE_CREATE EVENT FIRED - MAIN HANDLER!');
   try {
     console.log(`📨 Message received: "${message.content}" from ${message.author_id}`);
     console.log('Channel ID:', message.channel_id);
@@ -197,9 +197,9 @@ client.on('message', async (message) => {
   }
 });
 
-// Try alternative event names
-client.on('messageCreate', (message) => {
-  console.log('📨 MESSAGE_CREATE EVENT FIRED!', message.content);
+// Try alternative event names (for debugging)
+client.on('message', (message) => {
+  console.log('📨 MESSAGE EVENT FIRED!', message.content);
 });
 
 client.on('messageReceived', (message) => {
