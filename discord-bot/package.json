@@ -1,11 +1,12 @@
 {
   "name": "majic-breaches-discord-bot",
   "version": "1.0.0",
-  "type": "module",
-  "description": "Discord bot for searching data breaches",
+  "description": "Discord bot for Majic Breaches search",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
     "discord.js": "^14.22.1",
