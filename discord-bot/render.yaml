@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: majic-breaches-discord-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: CONVEX_URL
+        sync: false
