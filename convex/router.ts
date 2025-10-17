@@ -13,7 +13,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
-      const { query, limit = 100, platform } = body;
+      const { query, limit = 500, platform } = body;
       
       console.log("API search request:", { query, limit, platform });
       
