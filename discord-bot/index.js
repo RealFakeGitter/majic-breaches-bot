@@ -121,9 +121,19 @@ client.on('interactionCreate', async interaction => {
         preview.forEach((breach, index) => {
           description += `**${index + 1}. ${breach.breachName}**\n`;
           if (breach.breachDate) {
-            description += `📅 ${breach.breachDate}\n`;
+            description += `📅 Date: ${breach.breachDate}\n`;
           }
-          description += `🎯 Matched: ${breach.matchedField}\n`;
+          description += `🎯 Matched Field: ${breach.matchedField}\n`;
+          description += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
+          
+          // Show the actual breach content (email, password, etc.)
+          if (breach.content) {
+            const contentLines = breach.content.split('\n').filter(line => line.trim());
+            contentLines.forEach(line => {
+              description += `${line}\n`;
+            });
+          }
+          
           if (breach.recordCount) {
             description += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
           }
