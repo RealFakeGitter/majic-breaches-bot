@@ -4,7 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
-export const handleRevoltCommand = action({
+export const handleRevoltCommandNew = action({
   args: {
     content: v.string(),
     authorId: v.string(),
@@ -33,6 +33,14 @@ export const handleRevoltCommand = action({
             };
           }
 
+          // Check if API token is configured
+          const apiToken = process.env.LEAKOSINT_API_TOKEN;
+          if (!apiToken) {
+            return {
+              content: "❌ API token not configured. Please contact administrator."
+            };
+          }
+
           // Perform the search using the existing breach search function
           const searchResult = await ctx.runAction(api.breaches.searchBreaches, {
             query,
@@ -50,28 +58,74 @@ export const handleRevoltCommand = action({
             };
           }
 
-          // Format results for Revolt (limit to first 3 results to avoid message length limits)
-          const displayResults = results.results.slice(0, 3);
-          let response = `🔍 **Search Results for "${query}"**\n\n`;
-          response += `📊 Found ${searchResult.resultCount} total results (showing first ${displayResults.length})\n\n`;
-
-          for (const result of displayResults) {
-            response += `**${result.breachName}**\n`;
-            if (result.breachDescription) {
-              response += `*${result.breachDescription}*\n`;
-            }
-            response += `🎯 Match: ${result.matchedField}\n`;
-            response += `📋 Data Types: ${result.dataTypes.join(", ")}\n`;
-            response += `\`\`\`\n${result.content.substring(0, 150)}${result.content.length > 150 ? "..." : ""}\n\`\`\`\n\n`;
-          }
-
+          // If we have more than 3 results, create a text file
           if (searchResult.resultCount > 3) {
-            response += `*Use the web interface for all ${searchResult.resultCount} results*`;
-          }
+            // Create detailed text file content
+            let fileContent = `Search Results for: ${query}\n`;
+            fileContent += `Total Results Found: ${searchResult.resultCount}\n`;
+            fileContent += `Search Date: ${new Date().toISOString()}\n`;
+            fileContent += `${"=".repeat(60)}\n\n`;
 
-          return {
-            content: response
-          };
+            for (let i = 0; i < results.results.length; i++) {
+              const result = results.results[i];
+              fileContent += `Result #${i + 1}\n`;
+              fileContent += `Breach: ${result.breachName}\n`;
+              fileContent += `Matched Field: ${result.matchedField}\n`;
+              fileContent += `Data Types: ${result.dataTypes.join(", ")}\n`;
+              fileContent += `Content: ${result.content}\n`;
+              if (result.breachDate) {
+                fileContent += `Breach Date: ${result.breachDate}\n`;
+              }
+              if (result.breachDescription) {
+                fileContent += `Description: ${result.breachDescription}\n`;
+              }
+              fileContent += `${"-".repeat(40)}\n\n`;
+            }
+
+            // Store the file in Convex storage
+            const blob = new Blob([fileContent], { type: 'text/plain' });
+            const storageId = await ctx.storage.store(blob);
+            const fileUrl = await ctx.storage.getUrl(storageId);
+
+            // Format brief response message
+            const displayResults = results.results.slice(0, 3);
+            let response = `🔍 **Search Results for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"**\n`;
+            response += `📊 Found ${searchResult.resultCount} total results (showing first ${displayResults.length})\n\n`;
+
+            for (const result of displayResults) {
+              response += `**${result.breachName}**\n`;
+              response += `🎯 ${result.matchedField} | `;
+              response += `📋 ${result.dataTypes.slice(0, 3).join(", ")}\n`;
+              response += `\`\`\`\n${result.content.substring(0, 120)}${result.content.length > 120 ? "..." : ""}\n\`\`\`\n\n`;
+            }
+
+            response += `📎 **Complete results:** ${fileUrl}`;
+
+            return {
+              content: response,
+              fileUrl: fileUrl,
+              fileName: `breach_search_${query.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.txt`
+            };
+          } else {
+            // Format results for Revolt (3 or fewer results)
+            const displayResults = results.results;
+            let response = `🔍 **Search Results for "${query}"**\n\n`;
+            response += `📊 Found ${searchResult.resultCount} total results\n\n`;
+
+            for (const result of displayResults) {
+              response += `**${result.breachName}**\n`;
+              if (result.breachDescription) {
+                response += `*${result.breachDescription}*\n`;
+              }
+              response += `🎯 Match: ${result.matchedField}\n`;
+              response += `📋 Data Types: ${result.dataTypes.join(", ")}\n`;
+              response += `\`\`\`\n${result.content.substring(0, 150)}${result.content.length > 150 ? "..." : ""}\n\`\`\`\n\n`;
+            }
+
+            return {
+              content: response
+            };
+          }
         }
 
         case "stats": {
@@ -85,6 +139,12 @@ export const handleRevoltCommand = action({
         case "help": {
           return {
             content: `🤖 **Majic Breaches Bot Help**\n\n**Commands:**\n\`!breach search <query>\` - Search data breaches\n\`!breach stats\` - Show bot statistics\n\`!breach help\` - Show this help message\n\n**Examples:**\n\`!breach search john@example.com\`\n\`!breach search username123\`\n\n⚠️ This bot is for educational and security research purposes only.`
+          };
+        }
+
+        case "test": {
+          return {
+            content: "✅ Revolt bot communication with Convex is working!"
           };
         }
 
