@@ -83,7 +83,7 @@ client.on('messageCreate', async (message) => {
 
         try {
           // Call the Convex action
-          const result = await convex.action('revolt_bot.handleRevoltCommandNew', {
+         const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
             content: content,
             authorId: authorId,
             channelId: message.channel_id || message.channel?.id || "unknown",
@@ -123,7 +123,7 @@ client.on('messageCreate', async (message) => {
         }
       }
       else if (command === 'help' || command === 'stats' || command === 'test') {
-        const result = await convex.action('revolt_bot.handleRevoltCommandNew', {
+        const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
           content: content,
           authorId: authorId,
           channelId: message.channel_id || message.channel?.id || "unknown",
