@@ -29,7 +29,7 @@ if (!fs.existsSync(packageJsonPath)) {
 
 require('dotenv').config();
 const { Client } = require('revolt.js');
-const { ConvexHttpClient } = require('convex');
+const { ConvexHttpClient } = require('convex/browser');
 
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
