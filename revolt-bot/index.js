@@ -1,3 +1,33 @@
+// Auto-generate package.json if it doesn't exist
+const fs = require('fs');
+const path = require('path');
+
+const packageJsonPath = path.join(__dirname, 'package.json');
+if (!fs.existsSync(packageJsonPath)) {
+  const packageJson = {
+    "name": "majic-breaches-revolt-bot",
+    "version": "1.0.0",
+    "description": "Revolt bot for Majic Breaches search",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js",
+      "dev": "node index.js",
+      "build": "echo 'No build step required'"
+    },
+    "dependencies": {
+      "revolt.js": "^7.2.0",
+      "convex": "^1.28.0",
+      "dotenv": "^16.6.1"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  };
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+  console.log('Generated package.json');
+}
+
+require('dotenv').config();
 const { Client } = require('revolt.js');
 const { ConvexHttpClient } = require('convex');
 
@@ -95,3 +125,25 @@ client.on('message', async (message) => {
 });
 
 client.loginBot(process.env.REVOLT_TOKEN);
+
+/*
+PACKAGE.JSON CONTENT FOR REVOLT BOT:
+{
+  "name": "majic-breaches-revolt-bot",
+  "version": "1.0.0",
+  "description": "Revolt bot for Majic Breaches search",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "revolt.js": "^7.2.0",
+    "convex": "^1.28.0",
+    "dotenv": "^16.6.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+*/
