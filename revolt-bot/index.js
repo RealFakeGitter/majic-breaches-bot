@@ -1,135 +1,97 @@
 const { Client } = require('revolt.js');
-const http = require('http');
+const { ConvexHttpClient } = require('convex/browser');
 
-// Health check server
-const server = http.createServer((req, res) => {
-  if (req.url === '/health' || req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ 
-      status: 'healthy', 
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      bot: client?.user?.username || 'Not connected'
-    }));
-  } else {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Health check server running on port ${PORT}`);
-});
+const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 const client = new Client();
 
-const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL;
-
-if (!CONVEX_SITE_URL) {
-  console.error('CONVEX_SITE_URL environment variable is required');
-  process.exit(1);
-}
-
 client.on('ready', async () => {
-  console.log(`Revolt bot logged in as ${client.user.username}!`);
+  console.log(`Logged in as ${client.user.username}!`);
 });
 
 client.on('message', async (message) => {
   // Ignore messages from bots
   if (message.author?.bot) return;
   
-  const content = message.content?.trim();
-  if (!content || !content.startsWith('!breach')) return;
+  // Only respond to messages that start with !breach
+  if (!message.content?.startsWith('!breach')) return;
   
-  const args = content.split(' ').slice(1);
-  const command = args[0]?.toLowerCase();
+  const args = message.content.slice(7).trim().split(/ +/);
+  const command = args.shift()?.toLowerCase();
   
   try {
     if (command === 'search') {
-      if (args.length < 2) {
-        await message.reply('Usage: `!breach search <query>`');
+      if (args.length === 0) {
+        await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
         return;
       }
       
-      const query = args.slice(1).join(' ');
+      const query = args.join(' ');
+      console.log(`Revolt search: ${query}`);
       
-      // Call Convex API
-      const response = await fetch(`${CONVEX_SITE_URL}/api/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query, limit: 10, platform: 'revolt' }),
+      const result = await convex.action('revolt-bot:search', {
+        query,
+        limit: 10,
+        platform: 'revolt',
+        userId: message.author?._id,
+        username: message.author?.username,
+        channelId: message.channel?._id,
+        serverId: message.channel?.server?._id
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!result.success) {
+        await message.reply(`❌ Error: ${result.error}`);
+        return;
       }
       
-      const data = await response.json();
+      if (result.results.length === 0) {
+        await message.reply(`🔍 No results found for: **${query}**`);
+        return;
+      }
       
-      if (data.results && data.results.length > 0) {
-        let replyText = `🔍 **Search Results for "${query}"**\nFound ${data.results.length} result(s)\n\n`;
-        
-        // Add results (limit to first 5 for message length)
-        const displayResults = data.results.slice(0, 5);
-        displayResults.forEach((result, index) => {
-          replyText += `**${index + 1}. ${result.breachName}**\n`;
-          replyText += `Date: ${result.breachDate || 'Unknown'}\n`;
-          replyText += `Field: ${result.matchedField}\n`;
-          replyText += `Data: ${result.dataTypes.join(', ')}\n\n`;
-        });
-        
-        if (data.results.length > 5) {
-          replyText += `*Showing first 5 of ${data.results.length} results*`;
-          if (data.searchId) {
-            replyText += `\n\n📄 **View All Results:** ${CONVEX_SITE_URL}/results/${data.searchId}`;
-          }
+      const preview = result.results.slice(0, 3);
+      let response = `🔍 **Breach Search Results**\n\nFound **${result.results.length}** results for: **${query}**\n\n`;
+      
+      preview.forEach((breach, index) => {
+        response += `**${index + 1}. ${breach.breachName}**\n`;
+        if (breach.breachDate) {
+          response += `📅 ${breach.breachDate}\n`;
         }
-        
-        await message.reply(replyText);
-      } else {
-        await message.reply(`🔍 No breaches found for "${query}"`);
-      }
-    } else if (command === 'stats') {
-      const response = await fetch(`${CONVEX_SITE_URL}/api/stats`, {
-        method: 'GET',
+        response += `🎯 Matched: ${breach.matchedField}\n`;
+        if (breach.recordCount) {
+          response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
+        }
+        response += '\n';
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (result.results.length > 3) {
+        response += `*... and ${result.results.length - 3} more results*\n\n`;
       }
       
-      const stats = await response.json();
+      // Use the corrected URL format with query parameter
+      response += `🔗 **[View Full Results](${process.env.CONVEX_SITE_URL}/results?id=${result.searchId})**\n\n`;
+      response += `⚠️ *Use responsibly for security research purposes only*`;
       
-      const replyText = `📊 **Bot Statistics**\n\n` +
-        `Total Searches: ${stats.totalSearches.toLocaleString()}\n` +
-        `Total Results: ${stats.totalResults.toLocaleString()}`;
+      await message.reply(response);
       
-      await message.reply(replyText);
+    } else if (command === 'stats') {
+      const stats = await convex.query('bots:getBotStats');
+      
+      const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
+      
+      await message.reply(response);
+      
     } else if (command === 'help') {
-      const helpText = `🤖 **Majic Breaches Bot Help**\n\n` +
-        `**Commands:**\n` +
-        `\`!breach search <query>\` - Search for breaches\n` +
-        `\`!breach stats\` - Show bot statistics\n` +
-        `\`!breach help\` - Show this help message\n\n` +
-        `*Use responsibly for educational and security research purposes only*`;
+      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
       
-      await message.reply(helpText);
+      await message.reply(response);
+    } else {
+      await message.reply('❌ Unknown command. Use `!breach help` for available commands.');
     }
   } catch (error) {
-    console.error('Error handling command:', error);
-    await message.reply('An error occurred while processing your request. Please try again later.');
+    console.error('Command error:', error);
+    await message.reply('❌ An error occurred while processing your request.');
   }
 });
 
-client.on('error', error => {
-  console.error('Revolt client error:', error);
-});
-
-process.on('unhandledRejection', error => {
-  console.error('Unhandled promise rejection:', error);
-});
-
-client.loginBot(process.env.REVOLT_BOT_TOKEN);
+client.loginBot(process.env.REVOLT_TOKEN);
