@@ -124,7 +124,7 @@ client.on('message', async (message) => {
   }
 });
 
-client.loginBot(process.env.REVOLT_TOKEN);
+client.loginBot(process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN);
 
 /*
 PACKAGE.JSON CONTENT FOR REVOLT BOT:
