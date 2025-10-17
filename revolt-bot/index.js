@@ -82,7 +82,12 @@ client.on('message', async (message) => {
       let response = `🔍 **Breach Search Results**\n\nFound **${result.results.length}** results for: **${query}**\n\n`;
       
       preview.forEach((breach, index) => {
-        response += `**${index + 1}. ${breach.breachName}**\n`;
+        // Truncate breach name if it's too long
+        const truncatedBreachName = breach.breachName.length > 200 
+          ? breach.breachName.substring(0, 200) + '...' 
+          : breach.breachName;
+        
+        response += `**${index + 1}. ${truncatedBreachName}**\n`;
         if (breach.breachDate) {
           response += `📅 Date: ${breach.breachDate}\n`;
         }
