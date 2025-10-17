@@ -1,206 +1,132 @@
-import { Client } from 'revolt.js';
-import { ConvexHttpClient } from 'convex/browser';
-import dotenv from 'dotenv';
-import fetch from 'node-fetch';
-import WebSocket from 'ws';
+const { Client } = require('revolt.js');
+const http = require('http');
 
-// Polyfill WebSocket for Node.js environment
-global.WebSocket = WebSocket;
-
-dotenv.config();
-
-console.log('🔧 Environment check:');
-console.log('- Node version:', process.version);
-console.log('- REVOLT_BOT_TOKEN exists:', !!process.env.REVOLT_BOT_TOKEN);
-console.log('- CONVEX_URL exists:', !!process.env.CONVEX_URL);
-
-const client = new Client();
-const convex = new ConvexHttpClient(process.env.CONVEX_URL);
-
-let botUserId = null;
-
-client.on('ready', async () => {
-  console.log(`✅ Revolt bot logged in as ${client.user?.username || client.user?.display_name || 'Unknown'}!`);
-  
-  // Store bot user ID - hardcode the known bot ID from logs
-  botUserId = "01K41V1ZM6HABG3S2AKB5GG7SP";
-  
-  console.log(`🤖 Bot ID stored: ${botUserId}`);
-  console.log('✅ Client ready! Listening for messages...');
-});
-
-// Main message handler
-client.on('messageCreate', async (message) => {
-  try {
-    // Get author ID
-    const authorId = message.author_id || message.author?.id;
-    
-    // CRITICAL: Ignore messages from the bot itself
-    if (botUserId && authorId === botUserId) {
-      return; // Silent ignore - no logging to prevent spam
-    }
-    
-    // Ignore messages without author ID
-    if (!authorId) {
-      return;
-    }
-
-    const content = message.content?.trim();
-    if (!content) {
-      return;
-    }
-    
-    // CRITICAL: Don't respond to error messages to prevent loops
-    if (content.startsWith('❌') || content.includes('Unknown command') || content.includes('Error:')) {
-      return;
-    }
-    
-    console.log(`📨 Processing message: "${content}" from ${authorId}`);
-    
-    // Only process !breach commands
-    if (!content.startsWith('!breach')) {
-      return;
-    }
-
-    const parts = content.split(' ');
-    const command = parts[1]?.toLowerCase();
-
-    try {
-      if (command === 'search') {
-        const query = parts.slice(2).join(' ');
-        
-        if (!query) {
-          await message.reply({
-            content: "❌ Please provide a search query!\nUsage: `!breach search <query>`",
-          });
-          return;
-        }
-
-        // Send initial "searching" message
-        const searchingMsg = await message.reply({
-          content: "🔍 Searching breaches...",
-        });
-
-        try {
-          // Call the Convex action
-          const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
-            content: content,
-            authorId: authorId,
-            channelId: message.channel_id || message.channel?.id || "unknown",
-            serverId: message.channel?.server_id || undefined,
-          });
-
-          if (!result) {
-            await searchingMsg.edit({
-              content: "❌ No response from search service",
-            });
-            return;
-          }
-
-          // Handle file results
-          if (result.fileUrl && result.fileName) {
-            try {
-              await searchingMsg.edit({
-                content: result.content + "\n\n📎 **File download:** " + result.fileUrl,
-              });
-            } catch (fileError) {
-              console.error('File handling error:', fileError);
-              await searchingMsg.edit({
-                content: result.content,
-              });
-            }
-          } else {
-            await searchingMsg.edit({
-              content: result.content,
-            });
-          }
-
-        } catch (error) {
-          console.error('Search error:', error);
-          await searchingMsg.edit({
-            content: `❌ Search failed: ${error.message || "Unknown error"}`,
-          });
-        }
-      }
-      else if (command === 'help' || command === 'stats' || command === 'test') {
-        const result = await convex.action('revolt_bot:handleRevoltCommandNew', {
-          content: content,
-          authorId: authorId,
-          channelId: message.channel_id || message.channel?.id || "unknown",
-          serverId: message.channel?.server_id || undefined,
-        });
-
-        await message.reply({
-          content: result.content,
-        });
-      }
-      else {
-        await message.reply({
-          content: "❌ Unknown command. Use `!breach help` for available commands.",
-        });
-      }
-
-    } catch (error) {
-      console.error('Error handling message:', error);
-      try {
-        await message.reply({
-          content: "❌ An error occurred while processing your request.",
-        });
-      } catch (replyError) {
-        console.error('Error sending error reply:', replyError);
-      }
-    }
-  } catch (outerError) {
-    console.error('Outer error in message handler:', outerError);
+// Health check server
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      bot: client?.user?.username || 'Not connected'
+    }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
   }
 });
 
-// Connection events
-client.on('connecting', () => {
-  console.log('🔄 Connecting to Revolt...');
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Health check server running on port ${PORT}`);
 });
 
-client.on('connected', () => {
-  console.log('🔗 Connected to Revolt!');
+const client = new Client();
+
+const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL;
+
+if (!CONVEX_SITE_URL) {
+  console.error('CONVEX_SITE_URL environment variable is required');
+  process.exit(1);
+}
+
+client.on('ready', async () => {
+  console.log(`Revolt bot logged in as ${client.user.username}!`);
 });
 
-client.on('dropped', () => {
-  console.log('⚠️ Connection to Revolt dropped');
+client.on('message', async (message) => {
+  // Ignore messages from bots
+  if (message.author?.bot) return;
+  
+  const content = message.content?.trim();
+  if (!content || !content.startsWith('!breach')) return;
+  
+  const args = content.split(' ').slice(1);
+  const command = args[0]?.toLowerCase();
+  
+  try {
+    if (command === 'search') {
+      if (args.length < 2) {
+        await message.reply('Usage: `!breach search <query>`');
+        return;
+      }
+      
+      const query = args.slice(1).join(' ');
+      
+      // Call Convex API
+      const response = await fetch(`${CONVEX_SITE_URL}/api/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, limit: 10, platform: 'revolt' }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        let replyText = `🔍 **Search Results for "${query}"**\nFound ${data.results.length} result(s)\n\n`;
+        
+        // Add results (limit to first 5 for message length)
+        const displayResults = data.results.slice(0, 5);
+        displayResults.forEach((result, index) => {
+          replyText += `**${index + 1}. ${result.breachName}**\n`;
+          replyText += `Date: ${result.breachDate || 'Unknown'}\n`;
+          replyText += `Field: ${result.matchedField}\n`;
+          replyText += `Data: ${result.dataTypes.join(', ')}\n\n`;
+        });
+        
+        if (data.results.length > 5) {
+          replyText += `*Showing first 5 of ${data.results.length} results*`;
+        }
+        
+        await message.reply(replyText);
+      } else {
+        await message.reply(`🔍 No breaches found for "${query}"`);
+      }
+    } else if (command === 'stats') {
+      const response = await fetch(`${CONVEX_SITE_URL}/api/stats`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const stats = await response.json();
+      
+      const replyText = `📊 **Bot Statistics**\n\n` +
+        `Total Searches: ${stats.totalSearches.toLocaleString()}\n` +
+        `Total Results: ${stats.totalResults.toLocaleString()}`;
+      
+      await message.reply(replyText);
+    } else if (command === 'help') {
+      const helpText = `🤖 **Majic Breaches Bot Help**\n\n` +
+        `**Commands:**\n` +
+        `\`!breach search <query>\` - Search for breaches\n` +
+        `\`!breach stats\` - Show bot statistics\n` +
+        `\`!breach help\` - Show this help message\n\n` +
+        `*Use responsibly for educational and security research purposes only*`;
+      
+      await message.reply(helpText);
+    }
+  } catch (error) {
+    console.error('Error handling command:', error);
+    await message.reply('An error occurred while processing your request. Please try again later.');
+  }
 });
 
-// Error handlers
-process.on('unhandledRejection', (error) => {
+client.on('error', error => {
+  console.error('Revolt client error:', error);
+});
+
+process.on('unhandledRejection', error => {
   console.error('Unhandled promise rejection:', error);
 });
 
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  process.exit(1);
-});
-
-// Login function
-async function loginBot() {
-  try {
-    console.log('🚀 Starting Revolt bot login...');
-    
-    if (!process.env.REVOLT_BOT_TOKEN) {
-      throw new Error('REVOLT_BOT_TOKEN environment variable is not set');
-    }
-    
-    console.log('Token length:', process.env.REVOLT_BOT_TOKEN.length);
-    
-    const result = await client.loginBot(process.env.REVOLT_BOT_TOKEN);
-    console.log('✅ Login successful!');
-  } catch (error) {
-    console.error('❌ Failed to login to Revolt:', error);
-    if (error.response) {
-      console.error('HTTP Response:', error.response.status, error.response.statusText);
-    }
-    process.exit(1);
-  }
-}
-
-// Start the bot
-setTimeout(() => {
-  loginBot();
-}, 1000);
+client.loginBot(process.env.REVOLT_BOT_TOKEN);
