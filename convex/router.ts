@@ -6,6 +6,78 @@ import { decodeUTF8 } from "tweetnacl-util";
 
 const http = httpRouter();
 
+// Search API endpoint for traditional bots
+http.route({
+  path: "/api/search",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      const { query, limit = 100, platform } = body;
+      
+      if (!query) {
+        return new Response(JSON.stringify({ error: "Query is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Perform the search using the existing breach search function
+      const searchResult = await ctx.runAction(api.breaches.searchBreaches, {
+        query,
+        limit
+      });
+
+      // Get the results
+      const results = await ctx.runQuery(api.breaches.getSearchResults, {
+        searchId: searchResult.searchId
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        resultCount: searchResult.resultCount,
+        results: results?.results || []
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Search API error:", error);
+      return new Response(JSON.stringify({ 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+// Bot stats API endpoint
+http.route({
+  path: "/api/stats",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const stats = await ctx.runQuery(api.bots.getBotStats);
+      return new Response(JSON.stringify(stats), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Stats API error:", error);
+      return new Response(JSON.stringify({ 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // Discord webhook handler for interactions
 http.route({
   path: "/discord/interactions",
@@ -153,7 +225,7 @@ http.route({
     
     // Handle message events
     if (body.type === "Message" && body.content) {
-      const result = await ctx.runAction(api.revolt_bot.handleRevoltCommand, {
+      const result = await ctx.runAction(api.revolt_bot.handleRevoltCommandNew, {
         content: body.content,
         authorId: body.author,
         channelId: body.channel,
