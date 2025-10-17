@@ -29,7 +29,7 @@ if (!fs.existsSync(packageJsonPath)) {
 
 require('dotenv').config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { ConvexHttpClient } = require('convex');
+const { ConvexHttpClient } = require('convex/browser');
 
 const client = new Client({
   intents: [
