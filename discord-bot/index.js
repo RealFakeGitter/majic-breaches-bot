@@ -125,7 +125,13 @@ client.on('interactionCreate', async interaction => {
             embed.setFooter({ text: `Showing first 5 of ${data.results.length} results` });
           }
           
-          await interaction.editReply({ embeds: [embed] });
+          // Add full results link if we have more than 5 results
+          const replyOptions = { embeds: [embed] };
+          if (data.searchId && data.results.length > 5) {
+            replyOptions.content = `📄 **View All ${data.results.length} Results:** ${CONVEX_SITE_URL}/results/${data.searchId}`;
+          }
+          
+          await interaction.editReply(replyOptions);
         } else {
           const embed = new EmbedBuilder()
             .setTitle('🔍 No Results Found')
