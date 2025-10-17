@@ -1,19 +1,12 @@
 {
   "name": "majic-breaches-discord-bot",
   "version": "1.0.0",
-  "description": "Discord bot for Majic Breaches search",
+  "type": "commonjs",
   "main": "index.js",
-  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "build": "echo 'No build step required'"
+    "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.22.1",
-    "convex": "^1.27.1",
-    "dotenv": "^16.6.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "discord.js": "^14.22.1"
   }
 }
