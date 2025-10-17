@@ -1,3 +1,33 @@
+// Auto-generate package.json if it doesn't exist
+const fs = require('fs');
+const path = require('path');
+
+const packageJsonPath = path.join(__dirname, 'package.json');
+if (!fs.existsSync(packageJsonPath)) {
+  const packageJson = {
+    "name": "majic-breaches-discord-bot",
+    "version": "1.0.0",
+    "description": "Discord bot for Majic Breaches search",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js",
+      "dev": "node index.js",
+      "build": "echo 'No build step required'"
+    },
+    "dependencies": {
+      "discord.js": "^14.22.1",
+      "convex": "^1.28.0",
+      "dotenv": "^16.6.1"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  };
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+  console.log('Generated package.json');
+}
+
+require('dotenv').config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { ConvexHttpClient } = require('convex');
 
@@ -166,3 +196,25 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+/*
+PACKAGE.JSON CONTENT FOR DISCORD BOT:
+{
+  "name": "majic-breaches-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Majic Breaches search",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "convex": "^1.28.0",
+    "dotenv": "^16.6.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+*/
