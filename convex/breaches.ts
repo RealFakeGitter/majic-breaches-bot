@@ -10,7 +10,7 @@ export const searchBreaches = action({
   },
   handler: async (ctx, args): Promise<{ searchId: any; resultCount: number }> => {
     const userId = await getAuthUserId(ctx);
-    const limit = args.limit || 100;
+    const limit = args.limit || 500;
     
     // Create search record
     const searchId: any = await ctx.runMutation(api.breaches.createSearch, {
