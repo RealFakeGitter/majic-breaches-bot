@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: majic-breaches-revolt-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REVOLT_BOT_TOKEN
+        sync: false
+      - key: CONVEX_URL
+        sync: false
