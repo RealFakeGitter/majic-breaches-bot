@@ -84,9 +84,19 @@ client.on('message', async (message) => {
       preview.forEach((breach, index) => {
         response += `**${index + 1}. ${breach.breachName}**\n`;
         if (breach.breachDate) {
-          response += `📅 ${breach.breachDate}\n`;
+          response += `📅 Date: ${breach.breachDate}\n`;
         }
-        response += `🎯 Matched: ${breach.matchedField}\n`;
+        response += `🎯 Matched Field: ${breach.matchedField}\n`;
+        response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
+        
+        // Show the actual breach content (email, password, etc.)
+        if (breach.content) {
+          const contentLines = breach.content.split('\n').filter(line => line.trim());
+          contentLines.forEach(line => {
+            response += `${line}\n`;
+          });
+        }
+        
         if (breach.recordCount) {
           response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
         }
