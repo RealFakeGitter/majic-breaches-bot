@@ -78,7 +78,7 @@ client.on('message', async (message) => {
         return;
       }
       
-      const preview = result.results.slice(0, 3);
+      const preview = result.results.slice(0, 2); // Reduce to 2 results for better formatting
       let response = `🔍 **Breach Search Results**\n\nFound **${result.results.length}** results for: **${query}**\n\n`;
       
       preview.forEach((breach, index) => {
@@ -89,12 +89,18 @@ client.on('message', async (message) => {
         response += `🎯 Matched Field: ${breach.matchedField}\n`;
         response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
         
-        // Show the actual breach content (email, password, etc.)
+        // Show the actual breach content (email, password, etc.) with better formatting
         if (breach.content) {
+          response += `\n**🔍 Breach Data:**\n`;
           const contentLines = breach.content.split('\n').filter(line => line.trim());
-          contentLines.forEach(line => {
-            response += `${line}\n`;
+          // Limit to first 8 lines for Revolt (more generous than Discord)
+          const limitedLines = contentLines.slice(0, 8);
+          limitedLines.forEach(line => {
+            response += `\`${line}\`\n`;
           });
+          if (contentLines.length > 8) {
+            response += `*... and ${contentLines.length - 8} more lines*\n`;
+          }
         }
         
         if (breach.recordCount) {
@@ -103,8 +109,8 @@ client.on('message', async (message) => {
         response += '\n';
       });
       
-      if (result.results.length > 3) {
-        response += `*... and ${result.results.length - 3} more results*\n\n`;
+      if (result.results.length > 2) {
+        response += `*... and ${result.results.length - 2} more results*\n\n`;
       }
       
       // Use the corrected URL format with query parameter
