@@ -103,7 +103,15 @@ export const handleDiscordCommand = action({
             // Store the file in Convex storage
             const blob = new Blob([fileContent], { type: 'text/plain' });
             const storageId = await ctx.storage.store(blob);
-            const fileUrl = await ctx.storage.getUrl(storageId);
+
+            // Get the URL - note this will be a temporary signed URL
+            let fileUrl: string | null = null;
+            try {
+              fileUrl = await ctx.storage.getUrl(storageId);
+            } catch (error) {
+              console.error("Error getting storage URL:", error);
+              fileUrl = null;
+            }
 
             // Format brief response message
             const displayResults = results.results.slice(0, 3);
@@ -121,7 +129,11 @@ export const handleDiscordCommand = action({
               response += `\`${content}${result.content.length > 120 ? "..." : ""}\`\n\n`;
             }
 
-            response += `📎 **Complete results:** [Download File](${fileUrl})`;
+            if (fileUrl) {
+              response += `📎 **Complete results:** [Download File](${fileUrl})`;
+            } else {
+              response += `📎 **Complete results file created but URL unavailable**`;
+            }
 
             return {
               type: 4,
