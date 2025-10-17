@@ -195,7 +195,7 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN);
 
 /*
 PACKAGE.JSON CONTENT FOR DISCORD BOT:
