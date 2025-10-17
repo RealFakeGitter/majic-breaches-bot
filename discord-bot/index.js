@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { ConvexHttpClient } = require('convex/browser');
 const http = require('http');
 
 // Health check server
@@ -37,9 +36,6 @@ if (!CONVEX_SITE_URL) {
   console.error('CONVEX_SITE_URL environment variable is required');
   process.exit(1);
 }
-
-// Initialize Convex client
-const convex = new ConvexHttpClient(CONVEX_SITE_URL);
 
 // Register slash commands
 const commands = [
@@ -90,53 +86,55 @@ client.on('interactionCreate', async interaction => {
       const limit = interaction.options.getInteger('limit') || 10;
       
       try {
-        // Call Convex action directly
-        const searchResult = await convex.action("breaches:searchBreaches", {
-          query,
-          limit: Math.max(100, Math.min(10000, limit))
+        // Call Convex API using HTTP
+        const response = await fetch(`${CONVEX_SITE_URL}/api/search`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, limit, platform: 'discord' }),
         });
         
-        // Get the results
-        const results = await convex.query("breaches:getSearchResults", {
-          searchId: searchResult.searchId
-        });
-        
-        if (results && results.results && results.results.length > 0) {
-        console.log("Discord bot - First result:", JSON.stringify(results.results[0], null, 2));
-        
-        const embed = new EmbedBuilder()
-          .setTitle(`🔍 Search Results for "${query}"`)
-          .setColor(0x0099FF)
-          .setDescription(`Found ${results.results.length} result(s) - showing actual breach data`)
-          .setTimestamp();
-        
-        // Add fields for each result (limit to first 5 for embed limits)
-        const displayResults = results.results.slice(0, 5);
-        displayResults.forEach((result, index) => {
-          // Extract the actual breach content (first 200 chars for better visibility)
-          const contentPreview = result.content ? result.content.substring(0, 200) + (result.content.length > 200 ? "..." : "") : "No content available";
-          
-          embed.addFields({
-            name: `${index + 1}. ${result.breachName}`,
-            value: `**Match:** ${result.matchedField}\n**Data:** ${result.dataTypes.join(', ')}\n\`\`\`\n${contentPreview}\n\`\`\``,
-            inline: false
-          });
-        });
-        
-        if (results.results.length > 5) {
-          embed.setFooter({ text: `Showing first 5 of ${results.results.length} results` });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        await interaction.editReply({ embeds: [embed] });
-      } else {
-        const embed = new EmbedBuilder()
-          .setTitle('🔍 No Results Found')
-          .setDescription(`No breaches found for "${query}"`)
-          .setColor(0x999999)
-          .setTimestamp();
+        const data = await response.json();
         
-        await interaction.editReply({ embeds: [embed] });
-      }
+        if (data.results && data.results.length > 0) {
+          const embed = new EmbedBuilder()
+            .setTitle(`🔍 Search Results for "${query}"`)
+            .setColor(0x0099FF)
+            .setDescription(`Found ${data.results.length} result(s)`)
+            .setTimestamp();
+          
+          // Add fields for each result (limit to first 5 for embed limits)
+          const displayResults = data.results.slice(0, 5);
+          displayResults.forEach((result, index) => {
+            // Extract the actual breach content (first 200 chars for better visibility)
+            const contentPreview = result.content ? result.content.substring(0, 200) + (result.content.length > 200 ? "..." : "") : "No content available";
+            
+            embed.addFields({
+              name: `${index + 1}. ${result.breachName}`,
+              value: `**Date:** ${result.breachDate || 'Unknown'}\n**Match:** ${result.matchedField}\n**Data:** ${result.dataTypes.join(', ')}\n\`\`\`\n${contentPreview}\n\`\`\``,
+              inline: false
+            });
+          });
+          
+          if (data.results.length > 5) {
+            embed.setFooter({ text: `Showing first 5 of ${data.results.length} results` });
+          }
+          
+          await interaction.editReply({ embeds: [embed] });
+        } else {
+          const embed = new EmbedBuilder()
+            .setTitle('🔍 No Results Found')
+            .setDescription(`No breaches found for "${query}"`)
+            .setColor(0x999999)
+            .setTimestamp();
+          
+          await interaction.editReply({ embeds: [embed] });
+        }
       } catch (error) {
         console.error('Search error:', error);
         const embed = new EmbedBuilder()
@@ -151,7 +149,15 @@ client.on('interactionCreate', async interaction => {
       await interaction.deferReply();
       
       try {
-        const stats = await convex.query("bots:getBotStats");
+        const response = await fetch(`${CONVEX_SITE_URL}/api/stats`, {
+          method: 'GET',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const stats = await response.json();
         
         const embed = new EmbedBuilder()
           .setTitle('📊 Bot Statistics')
