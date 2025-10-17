@@ -90,19 +90,18 @@ client.on('interactionCreate', async interaction => {
       
       console.log(`Discord search: ${query} (limit: ${limit})`);
       
-      const result = await convex.action('discord-bot:search', {
+      const searchResult = await convex.action('breaches:searchBreaches', {
         query,
         limit,
-        platform: 'discord',
-        userId: interaction.user.id,
-        username: interaction.user.username,
-        channelId: interaction.channelId,
-        guildId: interaction.guildId
       });
       
-      if (!result.success) {
+      const result = await convex.query('breaches:getSearchResults', {
+        searchId: searchResult.searchId,
+      });
+      
+      if (!result) {
         await interaction.editReply({
-          content: `❌ Error: ${result.error}`,
+          content: `❌ Error: Search results not found`,
           ephemeral: true
         });
         return;
@@ -136,7 +135,7 @@ client.on('interactionCreate', async interaction => {
         }
         
         // Use the corrected URL format with query parameter
-        description += `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${result.searchId})`;
+        description += `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})`;
         
         embed.setDescription(description);
         embed.setFooter({ 
