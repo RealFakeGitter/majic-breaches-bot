@@ -1,33 +1,26 @@
-import { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActivityType } from 'discord.js';
-import { ConvexHttpClient } from 'convex/browser';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const http = require('http');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Health check server
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      bot: client?.user?.tag || 'Not connected'
+    }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
+});
 
-dotenv.config({ path: path.join(__dirname, '.env') });
-
-console.log('Environment variables loaded:');
-console.log('DISCORD_BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? 'Set' : 'Not set');
-console.log('DISCORD_CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? 'Set' : 'Not set');
-console.log('CONVEX_URL:', process.env.CONVEX_URL);
-
-if (!process.env.DISCORD_BOT_TOKEN) {
-  console.error('❌ DISCORD_BOT_TOKEN is required');
-  process.exit(1);
-}
-
-if (!process.env.DISCORD_CLIENT_ID) {
-  console.error('❌ DISCORD_CLIENT_ID is required');
-  process.exit(1);
-}
-
-if (!process.env.CONVEX_URL) {
-  console.error('❌ CONVEX_URL is required');
-  process.exit(1);
-}
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Health check server running on port ${PORT}`);
+});
 
 const client = new Client({
   intents: [
@@ -37,32 +30,27 @@ const client = new Client({
   ],
 });
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL);
+const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL;
 
-// Add error handling for the Discord client
-client.on('error', (error) => {
-  console.error('Discord client error:', error);
-});
+if (!CONVEX_SITE_URL) {
+  console.error('CONVEX_SITE_URL environment variable is required');
+  process.exit(1);
+}
 
-client.on('warn', (warning) => {
-  console.warn('Discord client warning:', warning);
-});
-
-// Define slash commands
+// Register slash commands
 const commands = [
   new SlashCommandBuilder()
     .setName('search')
-    .setDescription('Search for breaches')
+    .setDescription('Search for data breaches')
     .addStringOption(option =>
       option.setName('query')
-        .setDescription('Search query (email, username, etc.)')
+        .setDescription('Search term (email, username, etc.)')
         .setRequired(true))
     .addIntegerOption(option =>
       option.setName('limit')
-        .setDescription('Maximum number of results (default: 100)')
-        .setRequired(false)
+        .setDescription('Maximum number of results (default: 10)')
         .setMinValue(1)
-        .setMaxValue(10000)),
+        .setMaxValue(50)),
   
   new SlashCommandBuilder()
     .setName('stats')
@@ -71,168 +59,134 @@ const commands = [
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help information'),
-].map(command => command.toJSON());
+];
 
-// Register slash commands globally
-async function registerCommands() {
+client.once('ready', async () => {
+  console.log(`Discord bot logged in as ${client.user.tag}!`);
+  
   try {
-    const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN);
     console.log('Started refreshing application (/) commands.');
-
-    // Register commands globally (not guild-specific)
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-      { body: commands },
-    );
-
+    await client.application.commands.set(commands);
     console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
     console.error('Error registering commands:', error);
   }
-}
-
-client.once('ready', async () => {
-  console.log(`✅ Discord bot logged in as ${client.user.tag}!`);
-  console.log(`Bot is in ${client.guilds.cache.size} guilds`);
-  
-  // Set bot status - Updated for Discord.js v14
-  client.user.setActivity('🔍 Searching breaches', { type: ActivityType.Watching });
-  
-  await registerCommands();
 });
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, options } = interaction;
+  const { commandName } = interaction;
 
   try {
     if (commandName === 'search') {
-      await interaction.deferReply({ ephemeral: true });
-
-      const query = options.getString('query');
-      const limit = options.getInteger('limit') || 100;
-
-      console.log(`Search command: query="${query}", limit=${limit}`);
-
-      try {
-        // Use the dedicated Discord command handler
-        const commandOptions = [
-          { name: 'query', value: query },
-          { name: 'limit', value: limit }
-        ];
-
-        console.log('Calling Convex action with:', {
-          commandName: 'search',
-          options: commandOptions,
-          userId: interaction.user.id,
-          channelId: interaction.channelId,
-          guildId: interaction.guildId,
-        });
-
-        const result = await convex.action('discord_bot:handleDiscordCommand', {
-          commandName: 'search',
-          options: commandOptions,
-          userId: interaction.user.id,
-          channelId: interaction.channelId,
-          guildId: interaction.guildId,
-        });
-
-        console.log('Convex action result:', result);
-
-        // The result contains the Discord response format
-        if (result.data && result.data.content) {
-          await interaction.editReply({
-            content: result.data.content,
+      await interaction.deferReply();
+      
+      const query = interaction.options.getString('query');
+      const limit = interaction.options.getInteger('limit') || 10;
+      
+      // Call Convex API
+      const response = await fetch(`${CONVEX_SITE_URL}/api/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, limit, platform: 'discord' }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        const embed = new EmbedBuilder()
+          .setTitle(`🔍 Search Results for "${query}"`)
+          .setColor(0x0099FF)
+          .setDescription(`Found ${data.results.length} result(s)`)
+          .setTimestamp();
+        
+        // Add fields for each result (limit to first 10 for embed limits)
+        const displayResults = data.results.slice(0, 10);
+        displayResults.forEach((result, index) => {
+          embed.addFields({
+            name: `${index + 1}. ${result.breachName}`,
+            value: `**Date:** ${result.breachDate || 'Unknown'}\n**Field:** ${result.matchedField}\n**Data:** ${result.dataTypes.join(', ')}`,
+            inline: true
           });
-        } else {
-          await interaction.editReply({
-            content: "❌ Unexpected response format",
-          });
+        });
+        
+        if (data.results.length > 10) {
+          embed.setFooter({ text: `Showing first 10 of ${data.results.length} results` });
         }
-
-      } catch (error) {
-        console.error('Search error:', error);
-        await interaction.editReply({
-          content: `❌ Search failed: ${error.message || "Unknown error"}`,
-        });
+        
+        await interaction.editReply({ embeds: [embed] });
+      } else {
+        const embed = new EmbedBuilder()
+          .setTitle('🔍 No Results Found')
+          .setDescription(`No breaches found for "${query}"`)
+          .setColor(0x999999)
+          .setTimestamp();
+        
+        await interaction.editReply({ embeds: [embed] });
       }
-    }
-
-    if (commandName === 'help') {
-      try {
-        const result = await convex.action('discord_bot:handleDiscordCommand', {
-          commandName: 'help',
-          options: [],
-          userId: interaction.user.id,
-          channelId: interaction.channelId,
-          guildId: interaction.guildId,
-        });
-
-        await interaction.reply({
-          content: result.data.content,
-          ephemeral: true,
-        });
-      } catch (error) {
-        console.error('Help error:', error);
-        await interaction.reply({
-          content: "❌ Failed to show help",
-          ephemeral: true,
-        });
+    } else if (commandName === 'stats') {
+      await interaction.deferReply();
+      
+      const response = await fetch(`${CONVEX_SITE_URL}/api/stats`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const stats = await response.json();
+      
+      const embed = new EmbedBuilder()
+        .setTitle('📊 Bot Statistics')
+        .setColor(0x00FF00)
+        .addFields(
+          { name: 'Total Searches', value: stats.totalSearches.toLocaleString(), inline: true },
+          { name: 'Total Results', value: stats.totalResults.toLocaleString(), inline: true }
+        )
+        .setTimestamp();
+      
+      await interaction.editReply({ embeds: [embed] });
+    } else if (commandName === 'help') {
+      const embed = new EmbedBuilder()
+        .setTitle('🤖 Majic Breaches Bot Help')
+        .setDescription('Search data breaches for security research and OSINT')
+        .setColor(0x0099FF)
+        .addFields(
+          { name: '/search <query> [limit]', value: 'Search for breaches by email, username, etc.', inline: false },
+          { name: '/stats', value: 'Show bot usage statistics', inline: false },
+          { name: '/help', value: 'Show this help message', inline: false }
+        )
+        .setFooter({ text: 'Use responsibly for educational and security research purposes only' })
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed] });
     }
-
-    if (commandName === 'stats') {
-      try {
-        const result = await convex.action('discord_bot:handleDiscordCommand', {
-          commandName: 'stats',
-          options: [],
-          userId: interaction.user.id,
-          channelId: interaction.channelId,
-          guildId: interaction.guildId,
-        });
-
-        await interaction.reply({
-          content: result.data.content,
-          ephemeral: true,
-        });
-      } catch (error) {
-        console.error('Stats error:', error);
-        await interaction.reply({
-          content: "❌ Failed to fetch statistics",
-          ephemeral: true,
-        });
-      }
-    }
-
   } catch (error) {
-    console.error('Error handling interaction:', error);
-    const errorMessage = "❌ An error occurred while processing your request.";
+    console.error('Error handling command:', error);
+    const errorMessage = 'An error occurred while processing your request. Please try again later.';
     
     if (interaction.deferred) {
-      await interaction.editReply({ content: errorMessage });
+      await interaction.editReply(errorMessage);
     } else {
       await interaction.reply({ content: errorMessage, ephemeral: true });
     }
   }
 });
 
-// Handle process termination gracefully
-process.on('SIGINT', () => {
-  console.log('Received SIGINT, shutting down gracefully...');
-  client.destroy();
-  process.exit(0);
+client.on('error', error => {
+  console.error('Discord client error:', error);
 });
 
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM, shutting down gracefully...');
-  client.destroy();
-  process.exit(0);
+process.on('unhandledRejection', error => {
+  console.error('Unhandled promise rejection:', error);
 });
 
-// Login with error handling
-console.log('Attempting to login to Discord...');
-client.login(process.env.DISCORD_BOT_TOKEN).catch(error => {
-  console.error('Failed to login to Discord:', error);
-  process.exit(1);
-});
+client.login(process.env.DISCORD_BOT_TOKEN);
