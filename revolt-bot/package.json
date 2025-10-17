@@ -1,13 +1,19 @@
 {
   "name": "majic-breaches-revolt-bot",
-  "version": "1.0.0", 
-  "type": "commonjs",
+  "version": "1.0.0",
+  "description": "Revolt bot for Majic Breaches data breach search",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "echo 'No build step required'"
+    "dev": "node index.js"
   },
+  "keywords": ["revolt", "bot", "breach", "osint", "security"],
+  "author": "Majic Breaches",
+  "license": "MIT",
   "dependencies": {
     "revolt.js": "^7.2.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
