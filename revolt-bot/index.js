@@ -83,6 +83,9 @@ client.on('message', async (message) => {
         
         if (data.results.length > 5) {
           replyText += `*Showing first 5 of ${data.results.length} results*`;
+          if (data.searchId) {
+            replyText += `\n\n📄 **View All Results:** ${CONVEX_SITE_URL}/results/${data.searchId}`;
+          }
         }
         
         await message.reply(replyText);
