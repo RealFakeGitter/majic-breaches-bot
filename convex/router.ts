@@ -15,6 +15,8 @@ http.route({
       const body = await request.json();
       const { query, limit = 100, platform } = body;
       
+      console.log("API search request:", { query, limit, platform });
+      
       if (!query) {
         return new Response(JSON.stringify({ error: "Query is required" }), {
           status: 400,
@@ -23,10 +25,12 @@ http.route({
       }
 
       // Perform the search using the existing breach search function
+      console.log("About to call searchBreaches action...");
       const searchResult = await ctx.runAction(api.breaches.searchBreaches, {
         query,
         limit
       });
+      console.log("searchBreaches completed:", searchResult);
 
       // Get the results
       const results = await ctx.runQuery(api.breaches.getSearchResults, {
@@ -43,6 +47,7 @@ http.route({
       });
     } catch (error) {
       console.error("Search API error:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
       return new Response(JSON.stringify({ 
         error: "Internal server error",
         message: error instanceof Error ? error.message : "Unknown error"
