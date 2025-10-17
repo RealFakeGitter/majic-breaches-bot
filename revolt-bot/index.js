@@ -22,12 +22,33 @@ let botUserId = null;
 client.on('ready', async () => {
   console.log(`✅ Revolt bot logged in as ${client.user?.username || client.user?.display_name || 'Unknown'}!`);
   
+  // Debug: Log all available properties
+  console.log('🔍 Debug - client.user object:', JSON.stringify(client.user, null, 2));
+  console.log('🔍 Debug - client properties:', Object.keys(client));
+  
   // Store bot user ID for self-message detection - try multiple properties
   botUserId = client.user?._id || client.user?.id || client.user?.user_id;
   
   // If still undefined, try getting it from the client itself
   if (!botUserId && client.userId) {
     botUserId = client.userId;
+  }
+  
+  // Try other possible properties
+  if (!botUserId && client.user) {
+    // Try all properties on the user object
+    const userProps = Object.keys(client.user);
+    console.log('🔍 Available user properties:', userProps);
+    
+    // Look for any property that might be the ID
+    for (const prop of userProps) {
+      if (prop.toLowerCase().includes('id')) {
+        console.log(`🔍 Found ID-like property: ${prop} = ${client.user[prop]}`);
+        if (!botUserId) {
+          botUserId = client.user[prop];
+        }
+      }
+    }
   }
   
   console.log(`🤖 Bot ID stored: ${botUserId}`);
@@ -40,8 +61,15 @@ client.on('messageCreate', async (message) => {
     // Get author ID
     const authorId = message.author_id || message.author?.id;
     
+    // Debug: Log message details
+    console.log(`🔍 Debug - Message author_id: ${message.author_id}`);
+    console.log(`🔍 Debug - Message author?.id: ${message.author?.id}`);
+    console.log(`🔍 Debug - Bot ID: ${botUserId}`);
+    console.log(`🔍 Debug - Author ID: ${authorId}`);
+    
     // CRITICAL: Ignore messages from the bot itself
     if (botUserId && authorId === botUserId) {
+      console.log('🤖 Ignoring own message');
       return; // Silent ignore - no logging to prevent spam
     }
     
