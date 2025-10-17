@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { ConvexHttpClient } = require('convex/browser');
+const { ConvexHttpClient } = require('convex');
 
 const client = new Client({
   intents: [
