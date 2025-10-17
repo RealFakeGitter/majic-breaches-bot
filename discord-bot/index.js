@@ -124,7 +124,12 @@ client.on('interactionCreate', async interaction => {
         let description = `Found **${result.results.length}** results for: **${query}**\n\n`;
         
         preview.forEach((breach, index) => {
-          description += `**${index + 1}. ${breach.breachName}**\n`;
+          // Truncate breach name if it's too long for Discord
+          const truncatedBreachName = breach.breachName.length > 200 
+            ? breach.breachName.substring(0, 200) + '...' 
+            : breach.breachName;
+          
+          description += `**${index + 1}. ${truncatedBreachName}**\n`;
           if (breach.breachDate) {
             description += `📅 Date: ${breach.breachDate}\n`;
           }
