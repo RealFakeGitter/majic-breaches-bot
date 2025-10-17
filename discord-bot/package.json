@@ -1,13 +1,19 @@
 {
   "name": "majic-breaches-discord-bot",
   "version": "1.0.0",
-  "type": "commonjs",
+  "description": "Discord bot for Majic Breaches data breach search",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "echo 'No build step required'"
+    "dev": "node index.js"
   },
+  "keywords": ["discord", "bot", "breach", "osint", "security"],
+  "author": "Majic Breaches",
+  "license": "MIT",
   "dependencies": {
     "discord.js": "^14.22.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
