@@ -99,6 +99,11 @@ client.on('interactionCreate', async interaction => {
         searchId: searchResult.searchId,
       });
       
+      // Debug: Log the first result to see what we're getting
+      if (result && result.results.length > 0) {
+        console.log('First breach result:', JSON.stringify(result.results[0], null, 2));
+      }
+      
       if (!result) {
         await interaction.editReply({
           content: `❌ Error: Search results not found`,
@@ -115,7 +120,7 @@ client.on('interactionCreate', async interaction => {
       if (result.results.length === 0) {
         embed.setDescription(`No results found for: **${query}**`);
       } else {
-        const preview = result.results.slice(0, 3);
+        const preview = result.results.slice(0, 2); // Reduce to 2 results to fit more content
         let description = `Found **${result.results.length}** results for: **${query}**\n\n`;
         
         preview.forEach((breach, index) => {
@@ -126,12 +131,19 @@ client.on('interactionCreate', async interaction => {
           description += `🎯 Matched Field: ${breach.matchedField}\n`;
           description += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
           
-          // Show the actual breach content (email, password, etc.)
+          // Show the actual breach content (email, password, etc.) with better formatting
           if (breach.content) {
+            description += `\n**🔍 Breach Data:**\n`;
             const contentLines = breach.content.split('\n').filter(line => line.trim());
-            contentLines.forEach(line => {
-              description += `${line}\n`;
+            // Limit to first 5 lines to prevent overflow
+            const limitedLines = contentLines.slice(0, 5);
+            limitedLines.forEach(line => {
+              // Format each line in a code block for better readability
+              description += `\`${line}\`\n`;
             });
+            if (contentLines.length > 5) {
+              description += `*... and ${contentLines.length - 5} more lines*\n`;
+            }
           }
           
           if (breach.recordCount) {
@@ -140,12 +152,17 @@ client.on('interactionCreate', async interaction => {
           description += '\n';
         });
         
-        if (result.results.length > 3) {
-          description += `*... and ${result.results.length - 3} more results*\n\n`;
+        if (result.results.length > 2) {
+          description += `*... and ${result.results.length - 2} more results*\n\n`;
         }
         
         // Use the corrected URL format with query parameter
         description += `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})`;
+        
+        // Ensure description doesn't exceed Discord's 4096 character limit
+        if (description.length > 4000) {
+          description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})`;
+        }
         
         embed.setDescription(description);
         embed.setFooter({ 
