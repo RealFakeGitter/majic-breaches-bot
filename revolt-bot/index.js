@@ -59,18 +59,17 @@ client.on('message', async (message) => {
       const query = args.join(' ');
       console.log(`Revolt search: ${query}`);
       
-      const result = await convex.action('revolt-bot:search', {
+      const searchResult = await convex.action('breaches:searchBreaches', {
         query,
         limit: 10,
-        platform: 'revolt',
-        userId: message.author?._id,
-        username: message.author?.username,
-        channelId: message.channel?._id,
-        serverId: message.channel?.server?._id
       });
       
-      if (!result.success) {
-        await message.reply(`❌ Error: ${result.error}`);
+      const result = await convex.query('breaches:getSearchResults', {
+        searchId: searchResult.searchId,
+      });
+      
+      if (!result) {
+        await message.reply(`❌ Error: Search results not found`);
         return;
       }
       
@@ -99,7 +98,7 @@ client.on('message', async (message) => {
       }
       
       // Use the corrected URL format with query parameter
-      response += `🔗 **[View Full Results](${process.env.CONVEX_SITE_URL}/results?id=${result.searchId})**\n\n`;
+      response += `🔗 **[View Full Results](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})**\n\n`;
       response += `⚠️ *Use responsibly for security research purposes only*`;
       
       await message.reply(response);
