@@ -1,5 +1,5 @@
 const { Client } = require('revolt.js');
-const { ConvexHttpClient } = require('convex/browser');
+const { ConvexHttpClient } = require('convex');
 
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
