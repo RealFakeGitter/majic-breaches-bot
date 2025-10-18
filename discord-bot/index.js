@@ -27,7 +27,7 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 require('./keep-alive');
 
 const client = new Client({
@@ -39,7 +39,7 @@ const client = new Client({
 });
 
 // Use the correct Convex site URL for results links
-const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.cloud';
+const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.site';
 const API_BASE_URL = process.env.CONVEX_URL ? process.env.CONVEX_URL.replace('/api', '') : 'https://insightful-mongoose-187.convex.cloud';
 
 client.once('ready', async () => {
@@ -176,26 +176,42 @@ client.on('interactionCreate', async interaction => {
           response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
         }
         
-        // Use the correct site URL for results link
-        response += `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`;
-        
         // Ensure we don't exceed Discord's 2000 character limit
-        if (response.length > 1900) {
-          response = response.substring(0, 1800) + '...\n\n' + `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`;
+        if (response.length > 1800) {
+          response = response.substring(0, 1700) + '...\n\n*Use the button below to view all results*';
         }
         
+        // Create button for full results
+        const viewButton = new ButtonBuilder()
+          .setLabel('🔗 View Full Results')
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
+        
+        const row = new ActionRowBuilder().addComponents(viewButton);
+        
           await interaction.editReply({
-            content: response
+            content: response,
+            components: [row]
           });
         } else {
           // File attachment
-          const fileContent = format === 'json' ? JSON.stringify(searchData, null, 2) : `Results: ${searchData.resultCount}\n\n${searchData.results.map((b, i) => `${i+1}. ${b.breachName}\n${b.content}`).join('\n\n---\n\n')}`;
-          const fileName = `breach-results-${Date.now()}.${format === 'json' ? 'json' : 'txt'}`;
+          const fileContent = format === 'json' ? JSON.stringify(searchData, null, 2) : 
+            format === 'html' ? `<html><body><h1>Results: ${searchData.resultCount}</h1>${searchData.results.map((b, i) => `<div><h3>${i+1}. ${b.breachName}</h3><pre>${b.content}</pre></div>`).join('')}</body></html>` :
+            `Results: ${searchData.resultCount}\n\n${searchData.results.map((b, i) => `${i+1}. ${b.breachName}\n${b.content}`).join('\n\n---\n\n')}`;
+          const fileName = `breach-results-${Date.now()}.${format === 'json' ? 'json' : format === 'html' ? 'html' : 'txt'}`;
           const attachment = new AttachmentBuilder(Buffer.from(fileContent, 'utf8'), { name: fileName });
           
+          const viewButton = new ButtonBuilder()
+            .setLabel('🔗 View Online')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
+          
+          const row = new ActionRowBuilder().addComponents(viewButton);
+          
           await interaction.editReply({
-            content: `🔍 Found **${searchData.resultCount}** results\n\n📎 File attached\n\n🔗 **[View Online](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`,
-            files: [attachment]
+            content: `🔍 Found **${searchData.resultCount}** results\n\n📎 File: ${fileName}\n\n🔗 Use button to view online`,
+            files: [attachment],
+            components: [row]
           });
         }
         
