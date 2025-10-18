@@ -47,23 +47,35 @@ const convex = new ConvexHttpClient(convexUrl);
 const client = new Client();
 
 client.on('ready', async () => {
-  console.log(`✅ Logged in as ${client.user.username}!`);
-  console.log(`🤖 Bot ID: ${client.user._id}`);
-  console.log(`🔗 Connected to ${client.servers.size} servers`);
+  console.log(`✅ Logged in as ${client.user?.username || 'Unknown'}!`);
+  console.log(`🤖 Bot ID: ${client.user?._id || 'Unknown'}`);
+  console.log(`🔗 Connected to ${client.servers?.size || 0} servers`);
   console.log('🎯 Ready to receive commands!');
 });
 
 client.on('message', async (message) => {
   // Enhanced logging for debugging
   console.log(`📨 Message received:`);
-  console.log(`  Content: "${message.content}"`);
-  console.log(`  Author: ${message.author?.username} (ID: ${message.author?._id})`);
-  console.log(`  Channel: ${message.channel?._id}`);
-  console.log(`  Is Bot: ${message.author?.bot}`);
+  console.log(`  Content: "${message.content || 'No content'}"`);
+  console.log(`  Author: ${message.author?.username || 'Unknown'}`);
+  console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
+  console.log(`  Is Bot: ${message.author?.bot || false}`);
   
   // Ignore messages from bots
   if (message.author?.bot) {
     console.log('🤖 Ignoring bot message');
+    return;
+  }
+  
+  // Temporary: respond to any message for testing
+  if (message.content === 'test') {
+    console.log('🧪 Test message detected, sending response...');
+    try {
+      await message.reply('✅ Bot is receiving messages!');
+      console.log('✅ Test response sent');
+    } catch (error) {
+      console.error('❌ Failed to send test response:', error);
+    }
     return;
   }
   
@@ -80,7 +92,9 @@ client.on('message', async (message) => {
   
   try {
     if (command === 'ping') {
+      console.log('🏓 Sending ping response...');
       await message.reply('🏓 Pong! Bot is working!');
+      console.log('✅ Ping response sent successfully');
       return;
     } else if (command === 'search') {
       if (args.length === 0) {
@@ -172,7 +186,11 @@ client.on('message', async (message) => {
     }
   } catch (error) {
     console.error('Command error:', error);
-    await message.reply('❌ An error occurred while processing your request.');
+    try {
+      await message.reply('❌ An error occurred while processing your request.');
+    } catch (replyError) {
+      console.error('Failed to send error reply:', replyError);
+    }
   }
 });
 
@@ -187,14 +205,21 @@ client.on('disconnect', () => {
 
 // Login with better error handling
 const token = process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN;
-if (!token) {
-  console.error('❌ No bot token found! Please set REVOLT_BOT_TOKEN environment variable.');
+if (!token || token === 'YOUR_ACTUAL_TOKEN_HERE') {
+  console.error('❌ No valid bot token found! Please set REVOLT_BOT_TOKEN environment variable.');
+  console.error('Current token value:', token ? 'Set but may be placeholder' : 'Not set');
   process.exit(1);
 }
 
 console.log('🔄 Attempting to login to Revolt...');
-client.loginBot(token).catch(error => {
+console.log('Token length:', token.length);
+console.log('Token starts with:', token.substring(0, 10) + '...');
+
+client.loginBot(token).then(() => {
+  console.log('✅ Login successful!');
+}).catch(error => {
   console.error('❌ Failed to login to Revolt:', error);
+  console.error('Error details:', error.message);
   process.exit(1);
 });
 
