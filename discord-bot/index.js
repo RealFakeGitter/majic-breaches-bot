@@ -54,9 +54,9 @@ const client = new Client({
   ],
 });
 
-// Fixed URL construction - the Convex URL should be used directly for HTTP endpoints
+// Fixed URL construction - HTTP endpoints use .convex.site, not .convex.cloud
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.site';
-const CONVEX_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.cloud';
+const CONVEX_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
