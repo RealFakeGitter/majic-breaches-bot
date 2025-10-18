@@ -143,6 +143,11 @@ client.on('interactionCreate', async interaction => {
       try {
         const searchUrl = `${CONVEX_API_URL}/api/search`;
         console.log(`Making request to: ${searchUrl}`);
+        console.log('Request body:', JSON.stringify({
+          query,
+          limit,
+          platform: 'discord'
+        }));
         
         const searchResponse = await fetch(searchUrl, {
           method: 'POST',
@@ -154,6 +159,7 @@ client.on('interactionCreate', async interaction => {
             limit,
             platform: 'discord'
           }),
+          timeout: 30000, // 30 second timeout
         });
 
         console.log(`Response status: ${searchResponse.status}`);
@@ -177,7 +183,12 @@ client.on('interactionCreate', async interaction => {
         }
 
         const searchData = await searchResponse.json();
-        console.log('Search API response received, result count:', searchData.resultCount);
+        console.log('Search API response received:', {
+          success: searchData.success,
+          resultCount: searchData.resultCount,
+          hasResults: !!searchData.results,
+          resultsLength: searchData.results?.length || 0
+        });
         
         if (!searchData.success || !searchData.results || searchData.results.length === 0) {
           await interaction.editReply({
@@ -280,7 +291,9 @@ client.on('interactionCreate', async interaction => {
         const statsUrl = `${CONVEX_API_URL}/api/stats`;
         console.log(`Making stats request to: ${statsUrl}`);
         
-        const statsResponse = await fetch(statsUrl);
+        const statsResponse = await fetch(statsUrl, {
+          timeout: 10000 // 10 second timeout for stats
+        });
         console.log(`Stats response status: ${statsResponse.status}`);
         
         if (!statsResponse.ok) {
