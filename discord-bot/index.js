@@ -27,7 +27,7 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 require('./keep-alive');
 
 const client = new Client({
@@ -59,7 +59,17 @@ client.once('ready', async () => {
       .addIntegerOption(option =>
         option.setName('limit')
           .setDescription('Maximum number of results (default: 100)')
-          .setRequired(false)),
+          .setRequired(false))
+      .addStringOption(option =>
+        option.setName('format')
+          .setDescription('Output format (preview, json, txt, html)')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Preview (default)', value: 'preview' },
+            { name: 'JSON File', value: 'json' },
+            { name: 'Text File', value: 'txt' },
+            { name: 'HTML File', value: 'html' }
+          )),
     
     new SlashCommandBuilder()
       .setName('stats')
@@ -88,8 +98,9 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'search') {
       const query = interaction.options.getString('query');
       const limit = interaction.options.getInteger('limit') || 100;
+      const format = interaction.options.getString('format') || 'preview';
       
-      console.log(`Discord search: ${query} (limit: ${limit})`);
+      console.log(`Discord search: ${query} (limit: ${limit}, format: ${format})`);
       
       // Respond immediately with a simple message to avoid timeout
       await interaction.reply({
@@ -136,7 +147,9 @@ client.on('interactionCreate', async interaction => {
           return;
         }
         
-        // Create a simple text response instead of embed for faster processing
+        // Handle different output formats
+        if (format === 'preview') {
+          // Create a simple text response instead of embed for faster processing
         const preview = searchData.results.slice(0, 2);
         let response = `🔍 **Search Results**\n\nFound **${searchData.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
         
@@ -164,16 +177,27 @@ client.on('interactionCreate', async interaction => {
         }
         
         // Use the correct site URL for results link
-        response += `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?id=${searchData.searchId})**`;
+        response += `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`;
         
         // Ensure we don't exceed Discord's 2000 character limit
         if (response.length > 1900) {
-          response = response.substring(0, 1800) + '...\n\n' + `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?id=${searchData.searchId})**`;
+          response = response.substring(0, 1800) + '...\n\n' + `🔗 **[View Full Results](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`;
         }
         
-        await interaction.editReply({
-          content: response
-        });
+          await interaction.editReply({
+            content: response
+          });
+        } else {
+          // File attachment
+          const fileContent = format === 'json' ? JSON.stringify(searchData, null, 2) : `Results: ${searchData.resultCount}\n\n${searchData.results.map((b, i) => `${i+1}. ${b.breachName}\n${b.content}`).join('\n\n---\n\n')}`;
+          const fileName = `breach-results-${Date.now()}.${format === 'json' ? 'json' : 'txt'}`;
+          const attachment = new AttachmentBuilder(Buffer.from(fileContent, 'utf8'), { name: fileName });
+          
+          await interaction.editReply({
+            content: `🔍 Found **${searchData.resultCount}** results\n\n📎 File attached\n\n🔗 **[View Online](${CONVEX_SITE_URL}/results?searchId=${searchData.searchId})**`,
+            files: [attachment]
+          });
+        }
         
       } catch (searchError) {
         console.error('Search error details:', searchError);
@@ -221,13 +245,20 @@ client.on('interactionCreate', async interaction => {
       const helpText = `🤖 **Majic Breaches Bot Help**
 
 **Commands:**
-\`/search <query> [limit]\` - Search breaches
+\`/search <query> [limit] [format]\` - Search breaches
 \`/stats\` - Show statistics
 \`/help\` - Show this help
 
+**Format Options:**
+• \`preview\` - Show preview in Discord (default)
+• \`json\` - Download results as JSON file
+• \`txt\` - Download results as text file
+• \`html\` - Download results as HTML file
+
 **Examples:**
 \`/search john@example.com\`
-\`/search username123 500\`
+\`/search username123 500 json\`
+\`/search password123 100 txt\`
 
 ⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
 
