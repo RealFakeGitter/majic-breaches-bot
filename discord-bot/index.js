@@ -58,7 +58,7 @@ client.once('ready', async () => {
           .setRequired(true))
       .addIntegerOption(option =>
         option.setName('limit')
-          .setDescription('Maximum number of results (default: 10)')
+          .setDescription('Maximum number of results (default: 100)')
           .setRequired(false)),
     
     new SlashCommandBuilder()
@@ -89,16 +89,18 @@ client.on('interactionCreate', async interaction => {
       await interaction.deferReply();
       
       const query = interaction.options.getString('query');
-      const limit = interaction.options.getInteger('limit') || 10;
+      const limit = interaction.options.getInteger('limit') || 100;
       
       console.log(`Discord search: ${query} (limit: ${limit})`);
       
-      const searchResult = await convex.action('breaches:searchBreaches', {
+      // Fixed: Use dot notation instead of colon
+      const searchResult = await convex.action('breaches.searchBreaches', {
         query,
         limit,
       });
       
-      const result = await convex.query('breaches:getSearchResults', {
+      // Fixed: Use dot notation instead of colon
+      const result = await convex.query('breaches.getSearchResults', {
         searchId: searchResult.searchId,
       });
       
@@ -143,14 +145,14 @@ client.on('interactionCreate', async interaction => {
           if (breach.content) {
             description += `\n**🔍 Breach Data:**\n`;
             const contentLines = breach.content.split('\n').filter(line => line.trim());
-            // Limit to first 5 lines to prevent overflow
-            const limitedLines = contentLines.slice(0, 5);
+            // Limit to first 3 lines to prevent overflow
+            const limitedLines = contentLines.slice(0, 3);
             limitedLines.forEach(line => {
               // Format each line in a code block for better readability
               description += `\`${line}\`\n`;
             });
-            if (contentLines.length > 5) {
-              description += `*... and ${contentLines.length - 5} more lines*\n`;
+            if (contentLines.length > 3) {
+              description += `*... and ${contentLines.length - 3} more lines*\n`;
             }
           }
           
@@ -164,7 +166,7 @@ client.on('interactionCreate', async interaction => {
           description += `*... and ${result.results.length - 2} more results*\n\n`;
         }
         
-        // Use the corrected URL format with query parameter
+        // Use your Convex site URL for full results
         description += `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.site/results?id=${searchResult.searchId})`;
         
         // Ensure description doesn't exceed Discord's 4096 character limit
@@ -183,7 +185,8 @@ client.on('interactionCreate', async interaction => {
     } else if (commandName === 'stats') {
       await interaction.deferReply();
       
-      const stats = await convex.query('bots:getBotStats');
+      // Fixed: Use dot notation instead of colon
+      const stats = await convex.query('bots.getBotStats');
       
       const embed = new EmbedBuilder()
         .setTitle('📊 Bot Statistics')
@@ -230,25 +233,3 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN);
-
-/*
-PACKAGE.JSON CONTENT FOR DISCORD BOT:
-{
-  "name": "majic-breaches-discord-bot",
-  "version": "1.0.0",
-  "description": "Discord bot for Majic Breaches search",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
-  },
-  "dependencies": {
-    "discord.js": "^14.22.1",
-    "convex": "^1.28.0",
-    "dotenv": "^16.6.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
-}
-*/
