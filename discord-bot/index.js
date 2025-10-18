@@ -167,11 +167,11 @@ client.on('interactionCreate', async interaction => {
         }
         
         // Use your Convex site URL for full results
-        description += `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.site/results?id=${searchResult.searchId})`;
+        description += `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.app/results?id=${searchResult.searchId})`;
         
         // Ensure description doesn't exceed Discord's 4096 character limit
         if (description.length > 4000) {
-          description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.site/results?id=${searchResult.searchId})`;
+          description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.app/results?id=${searchResult.searchId})`;
         }
         
         embed.setDescription(description);
