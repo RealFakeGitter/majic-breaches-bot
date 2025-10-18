@@ -119,8 +119,25 @@ client.on('interactionCreate', async interaction => {
       
       console.log(`Discord search: ${query} (limit: ${limit}, format: ${format})`);
       
-      // Use deferReply instead of reply to give us more time
-      await interaction.deferReply({ ephemeral: true });
+      // Immediately acknowledge the interaction to prevent timeout
+      try {
+        await interaction.deferReply({ ephemeral: true });
+        console.log('Successfully deferred reply');
+      } catch (deferError) {
+        console.error('Failed to defer reply:', deferError);
+        return;
+      }
+      
+      // Send immediate response with search in progress message
+      try {
+        await interaction.editReply({
+          content: `🔍 Searching for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"...\n\n⏳ This may take a few seconds...`
+        });
+        console.log('Sent initial search message');
+      } catch (editError) {
+        console.error('Failed to send initial message:', editError);
+        return;
+      }
       
       // Perform the search
       try {
@@ -140,7 +157,6 @@ client.on('interactionCreate', async interaction => {
         });
 
         console.log(`Response status: ${searchResponse.status}`);
-        console.log(`Response headers:`, Object.fromEntries(searchResponse.headers.entries()));
 
         if (!searchResponse.ok) {
           const errorText = await searchResponse.text();
@@ -161,7 +177,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         const searchData = await searchResponse.json();
-        console.log('Search API response received:', JSON.stringify(searchData, null, 2));
+        console.log('Search API response received, result count:', searchData.resultCount);
         
         if (!searchData.success || !searchData.results || searchData.results.length === 0) {
           await interaction.editReply({
@@ -241,14 +257,24 @@ client.on('interactionCreate', async interaction => {
       } catch (searchError) {
         console.error('Search error details:', searchError);
         console.error('Search error stack:', searchError.stack);
-        await interaction.editReply({
-          content: `❌ Search failed: ${searchError.message.substring(0, 100)}`,
-        });
+        try {
+          await interaction.editReply({
+            content: `❌ Search failed: ${searchError.message.substring(0, 100)}`,
+          });
+        } catch (editError) {
+          console.error('Failed to edit reply with error:', editError);
+        }
       }
       
     } else if (commandName === 'stats') {
-      // Use deferReply for stats too
-      await interaction.deferReply({ ephemeral: true });
+      // Immediately acknowledge the interaction
+      try {
+        await interaction.deferReply({ ephemeral: true });
+        console.log('Successfully deferred stats reply');
+      } catch (deferError) {
+        console.error('Failed to defer stats reply:', deferError);
+        return;
+      }
       
       try {
         const statsUrl = `${CONVEX_API_URL}/api/stats`;
@@ -316,13 +342,14 @@ client.on('interactionCreate', async interaction => {
           content: '❌ An error occurred while processing your request.', 
           ephemeral: true 
         });
-      } else if (interaction.deferred) {
+      } else if (interaction.deferred && !interaction.replied) {
         await interaction.editReply({ 
           content: '❌ An error occurred while processing your request.' 
         });
       }
     } catch (replyError) {
       console.error('Failed to send error response:', replyError);
+      // Don't try to respond again if we get another error
     }
   }
 });
