@@ -54,15 +54,16 @@ const client = new Client({
   ],
 });
 
-// Use the correct Convex site URL for results links
+// Fixed URL construction - the Convex URL should be used directly for HTTP endpoints
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.site';
-const API_BASE_URL = process.env.CONVEX_URL ? process.env.CONVEX_URL.replace('/api', '') : 'https://insightful-mongoose-187.convex.cloud';
+const CONVEX_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.cloud';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
-  console.log(`API Base URL: ${API_BASE_URL}`);
+  console.log(`Convex URL: ${CONVEX_URL}`);
   console.log(`Site URL: ${CONVEX_SITE_URL}`);
-  console.log(`Full API URL: ${API_BASE_URL}/api/search`);
+  console.log(`Search API URL: ${CONVEX_URL}/api/search`);
+  console.log(`Stats API URL: ${CONVEX_URL}/api/stats`);
   
   const commands = [
     new SlashCommandBuilder()
@@ -126,7 +127,7 @@ client.on('interactionCreate', async interaction => {
       
       // Perform the search in the background
       try {
-        const searchUrl = `${API_BASE_URL}/api/search`;
+        const searchUrl = `${CONVEX_URL}/api/search`;
         console.log(`Making request to: ${searchUrl}`);
         
         const searchResponse = await fetch(searchUrl, {
@@ -147,8 +148,17 @@ client.on('interactionCreate', async interaction => {
         if (!searchResponse.ok) {
           const errorText = await searchResponse.text();
           console.error('Search API error response:', errorText);
+          
+          let errorMessage = 'Unknown error';
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.message || errorJson.error || errorText;
+          } catch (e) {
+            errorMessage = errorText;
+          }
+          
           await interaction.editReply({
-            content: `❌ Search failed (${searchResponse.status}): ${errorText.substring(0, 100) || 'Unknown error'}`,
+            content: `❌ Search failed (${searchResponse.status}): ${errorMessage.substring(0, 200)}`,
           });
           return;
         }
@@ -166,45 +176,45 @@ client.on('interactionCreate', async interaction => {
         // Handle different output formats
         if (format === 'preview') {
           // Create a simple text response instead of embed for faster processing
-        const preview = searchData.results.slice(0, 2);
-        let response = `🔍 **Search Results**\n\nFound **${searchData.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
-        
-        preview.forEach((breach, index) => {
-          const truncatedBreachName = breach.breachName.length > 100 
-            ? breach.breachName.substring(0, 100) + '...' 
-            : breach.breachName;
+          const preview = searchData.results.slice(0, 2);
+          let response = `🔍 **Search Results**\n\nFound **${searchData.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
           
-          response += `**${index + 1}. ${truncatedBreachName}**\n`;
-          response += `🎯 Match: ${breach.matchedField}\n`;
-          response += `📋 Fields: ${breach.dataTypes.join(', ')}\n`;
+          preview.forEach((breach, index) => {
+            const truncatedBreachName = breach.breachName.length > 100 
+              ? breach.breachName.substring(0, 100) + '...' 
+              : breach.breachName;
+            
+            response += `**${index + 1}. ${truncatedBreachName}**\n`;
+            response += `🎯 Match: ${breach.matchedField}\n`;
+            response += `📋 Fields: ${breach.dataTypes.join(', ')}\n`;
+            
+            if (breach.content) {
+              const contentLines = breach.content.split('\n').filter(line => line.trim());
+              const limitedLines = contentLines.slice(0, 2);
+              limitedLines.forEach(line => {
+                response += `\`${line.substring(0, 80)}${line.length > 80 ? "..." : ""}\`\n`;
+              });
+            }
+            response += '\n';
+          });
           
-          if (breach.content) {
-            const contentLines = breach.content.split('\n').filter(line => line.trim());
-            const limitedLines = contentLines.slice(0, 2);
-            limitedLines.forEach(line => {
-              response += `\`${line.substring(0, 80)}${line.length > 80 ? "..." : ""}\`\n`;
-            });
+          if (searchData.resultCount > 2) {
+            response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
           }
-          response += '\n';
-        });
-        
-        if (searchData.resultCount > 2) {
-          response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
-        }
-        
-        // Ensure we don't exceed Discord's 2000 character limit
-        if (response.length > 1800) {
-          response = response.substring(0, 1700) + '...\n\n*Use the button below to view all results*';
-        }
-        
-        // Create button for full results
-        const viewButton = new ButtonBuilder()
-          .setLabel('🔗 View Full Results')
-          .setStyle(ButtonStyle.Link)
-          .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
-        
-        const row = new ActionRowBuilder().addComponents(viewButton);
-        
+          
+          // Ensure we don't exceed Discord's 2000 character limit
+          if (response.length > 1800) {
+            response = response.substring(0, 1700) + '...\n\n*Use the button below to view all results*';
+          }
+          
+          // Create button for full results
+          const viewButton = new ButtonBuilder()
+            .setLabel('🔗 View Full Results')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
+          
+          const row = new ActionRowBuilder().addComponents(viewButton);
+          
           await interaction.editReply({
             content: response,
             components: [row]
@@ -247,14 +257,16 @@ client.on('interactionCreate', async interaction => {
       });
       
       try {
-        const statsUrl = `${API_BASE_URL}/api/stats`;
+        const statsUrl = `${CONVEX_URL}/api/stats`;
         console.log(`Making stats request to: ${statsUrl}`);
         
         const statsResponse = await fetch(statsUrl);
         console.log(`Stats response status: ${statsResponse.status}`);
         
         if (!statsResponse.ok) {
-          throw new Error(`Stats API returned ${statsResponse.status}`);
+          const errorText = await statsResponse.text();
+          console.error('Stats API error:', errorText);
+          throw new Error(`Stats API returned ${statsResponse.status}: ${errorText}`);
         }
         
         const stats = await statsResponse.json();
@@ -268,7 +280,7 @@ client.on('interactionCreate', async interaction => {
       } catch (statsError) {
         console.error('Stats error:', statsError);
         await interaction.editReply({
-          content: '❌ Failed to get statistics.',
+          content: `❌ Failed to get statistics: ${statsError.message}`,
         });
       }
       
