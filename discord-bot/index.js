@@ -1,4 +1,4 @@
-// Auto-generate package.json if it doesn't exist
+// Fixed Discord bot - uses API endpoints instead of direct Convex calls
 const fs = require('fs');
 const path = require('path');
 
@@ -16,7 +16,6 @@ if (!fs.existsSync(packageJsonPath)) {
     },
     "dependencies": {
       "discord.js": "^14.22.1",
-      "convex": "^1.28.0",
       "dotenv": "^16.6.1"
     },
     "engines": {
@@ -29,9 +28,6 @@ if (!fs.existsSync(packageJsonPath)) {
 
 require('dotenv').config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { ConvexHttpClient } = require('convex/browser');
-
-// Import keep-alive functionality
 require('./keep-alive');
 
 const client = new Client({
@@ -42,12 +38,11 @@ const client = new Client({
   ],
 });
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL);
+const API_BASE_URL = process.env.CONVEX_URL.replace('/api', '');
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   
-  // Register slash commands
   const commands = [
     new SlashCommandBuilder()
       .setName('search')
@@ -93,25 +88,34 @@ client.on('interactionCreate', async interaction => {
       
       console.log(`Discord search: ${query} (limit: ${limit})`);
       
-      // Fixed: Use dot notation instead of colon
-      const searchResult = await convex.action('breaches.searchBreaches', {
-        query,
-        limit,
+      const searchResponse = await fetch(`${API_BASE_URL}/api/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          limit,
+          platform: 'discord'
+        }),
       });
-      
-      // Fixed: Use dot notation instead of colon
-      const result = await convex.query('breaches.getSearchResults', {
-        searchId: searchResult.searchId,
-      });
-      
-      // Debug: Log the first result to see what we're getting
-      if (result && result.results.length > 0) {
-        console.log('First breach result:', JSON.stringify(result.results[0], null, 2));
-      }
-      
-      if (!result) {
+
+      if (!searchResponse.ok) {
+        const errorText = await searchResponse.text();
+        console.error('Search API error:', errorText);
         await interaction.editReply({
-          content: `❌ Error: Search results not found`,
+          content: `❌ Search failed: ${errorText}`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      const searchData = await searchResponse.json();
+      console.log('Search API response:', searchData);
+      
+      if (!searchData.success || !searchData.results || searchData.results.length === 0) {
+        await interaction.editReply({
+          content: `🔍 **Search Results for "${query}"**\n\n❌ No results found.`,
           ephemeral: true
         });
         return;
@@ -122,71 +126,61 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x3B82F6)
         .setTimestamp();
       
-      if (result.results.length === 0) {
-        embed.setDescription(`No results found for: **${query}**`);
-      } else {
-        const preview = result.results.slice(0, 2); // Reduce to 2 results to fit more content
-        let description = `Found **${result.results.length}** results for: **${query}**\n\n`;
+      const preview = searchData.results.slice(0, 2);
+      let description = `Found **${searchData.resultCount}** results for: **${query}**\n\n`;
+      
+      preview.forEach((breach, index) => {
+        const truncatedBreachName = breach.breachName.length > 200 
+          ? breach.breachName.substring(0, 200) + '...' 
+          : breach.breachName;
         
-        preview.forEach((breach, index) => {
-          // Truncate breach name if it's too long for Discord
-          const truncatedBreachName = breach.breachName.length > 200 
-            ? breach.breachName.substring(0, 200) + '...' 
-            : breach.breachName;
-          
-          description += `**${index + 1}. ${truncatedBreachName}**\n`;
-          if (breach.breachDate) {
-            description += `📅 Date: ${breach.breachDate}\n`;
-          }
-          description += `🎯 Matched Field: ${breach.matchedField}\n`;
-          description += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
-          
-          // Show the actual breach content (email, password, etc.) with better formatting
-          if (breach.content) {
-            description += `\n**🔍 Breach Data:**\n`;
-            const contentLines = breach.content.split('\n').filter(line => line.trim());
-            // Limit to first 3 lines to prevent overflow
-            const limitedLines = contentLines.slice(0, 3);
-            limitedLines.forEach(line => {
-              // Format each line in a code block for better readability
-              description += `\`${line}\`\n`;
-            });
-            if (contentLines.length > 3) {
-              description += `*... and ${contentLines.length - 3} more lines*\n`;
-            }
-          }
-          
-          if (breach.recordCount) {
-            description += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
-          }
-          description += '\n';
-        });
+        description += `**${index + 1}. ${truncatedBreachName}**\n`;
+        if (breach.breachDate) {
+          description += `📅 Date: ${breach.breachDate}\n`;
+        }
+        description += `🎯 Matched Field: ${breach.matchedField}\n`;
+        description += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
         
-        if (result.results.length > 2) {
-          description += `*... and ${result.results.length - 2} more results*\n\n`;
+        if (breach.content) {
+          description += `\n**🔍 Breach Data:**\n`;
+          const contentLines = breach.content.split('\n').filter(line => line.trim());
+          const limitedLines = contentLines.slice(0, 3);
+          limitedLines.forEach(line => {
+            description += `\`${line}\`\n`;
+          });
+          if (contentLines.length > 3) {
+            description += `*... and ${contentLines.length - 3} more lines*\n`;
+          }
         }
         
-        // Use your Convex site URL for full results
-        description += `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.app/results?id=${searchResult.searchId})`;
-        
-        // Ensure description doesn't exceed Discord's 4096 character limit
-        if (description.length > 4000) {
-          description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](https://insightful-mongoose-187.convex.app/results?id=${searchResult.searchId})`;
+        if (breach.recordCount) {
+          description += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
         }
-        
-        embed.setDescription(description);
-        embed.setFooter({ 
-          text: `${result.results.length} total results • Use responsibly` 
-        });
+        description += '\n';
+      });
+      
+      if (searchData.resultCount > 2) {
+        description += `*... and ${searchData.resultCount - 2} more results*\n\n`;
       }
+      
+      description += `[🔗 **View Full Results**](${API_BASE_URL}/results?id=${searchData.searchId})`;
+      
+      if (description.length > 4000) {
+        description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](${API_BASE_URL}/results?id=${searchData.searchId})`;
+      }
+      
+      embed.setDescription(description);
+      embed.setFooter({ 
+        text: `${searchData.resultCount} total results • Use responsibly` 
+      });
       
       await interaction.editReply({ embeds: [embed] });
       
     } else if (commandName === 'stats') {
       await interaction.deferReply();
       
-      // Fixed: Use dot notation instead of colon
-      const stats = await convex.query('bots.getBotStats');
+      const statsResponse = await fetch(`${API_BASE_URL}/api/stats`);
+      const stats = await statsResponse.json();
       
       const embed = new EmbedBuilder()
         .setTitle('📊 Bot Statistics')
