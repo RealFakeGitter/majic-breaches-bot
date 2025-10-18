@@ -40,11 +40,21 @@ client.on('ready', async () => {
 });
 
 client.on('message', async (message) => {
+  console.log(`Received message: "${message.content}" from ${message.author?.username}`);
+  
   // Ignore messages from bots
-  if (message.author?.bot) return;
+  if (message.author?.bot) {
+    console.log('Ignoring bot message');
+    return;
+  }
   
   // Only respond to messages that start with !breach
-  if (!message.content?.startsWith('!breach')) return;
+  if (!message.content?.startsWith('!breach')) {
+    console.log('Message does not start with !breach');
+    return;
+  }
+  
+  console.log('Processing !breach command');
   
   const args = message.content.slice(7).trim().split(/ +/);
   const command = args.shift()?.toLowerCase();
