@@ -55,7 +55,7 @@ const client = new Client({
 });
 
 // Fixed URL construction - API calls go to Convex, web interface goes to Vercel
-const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
+const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.cloud';
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
 
 client.once('ready', async () => {
@@ -208,7 +208,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Full Results')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/results?searchId=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
@@ -227,7 +227,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Online')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/results?searchId=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
