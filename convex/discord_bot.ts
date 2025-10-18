@@ -76,102 +76,47 @@ export const handleDiscordCommand = action({
             };
           }
 
-          // If we have more than 3 results, create and upload a text file
-          if (searchResult.resultCount > 3) {
-            // Create detailed text file content
-            let fileContent = `Search Results for: ${query}\n`;
-            fileContent += `Total Results Found: ${searchResult.resultCount}\n`;
-            fileContent += `Search Date: ${new Date().toISOString()}\n`;
-            fileContent += `${"=".repeat(60)}\n\n`;
+          // Format results for Discord - consistent with embed version
+          const displayResults = results.results.slice(0, 2); // Match embed version
+          let response = `🔍 **Breach Search Results**\n\nFound **${searchResult.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
 
-            for (let i = 0; i < results.results.length; i++) {
-              const result = results.results[i];
-              fileContent += `Result #${i + 1}\n`;
-              fileContent += `Breach: ${result.breachName}\n`;
-              fileContent += `Matched Field: ${result.matchedField}\n`;
-              fileContent += `Data Types: ${result.dataTypes.join(", ")}\n`;
-              fileContent += `Content: ${result.content}\n`;
-              if (result.breachDate) {
-                fileContent += `Breach Date: ${result.breachDate}\n`;
-              }
-              if (result.breachDescription) {
-                fileContent += `Description: ${result.breachDescription}\n`;
-              }
-              fileContent += `${"-".repeat(40)}\n\n`;
+          for (const result of displayResults) {
+            const breachName = result.breachName.length > 200 
+              ? result.breachName.substring(0, 200) + '...' 
+              : result.breachName;
+            
+            response += `**${breachName}**\n`;
+            response += `🎯 Match: ${result.matchedField}\n`;
+            response += `📋 Fields: ${result.dataTypes.join(", ")}\n`;
+            
+            if (result.content) {
+              response += `\n**🔍 Breach Data:**\n`;
+              const lines = result.content.split('\n').filter(line => line.trim()).slice(0, 3);
+              lines.forEach(line => response += `\`${line}\`\n`);
             }
-
-            // Store the file in Convex storage
-            const blob = new Blob([fileContent], { type: 'text/plain' });
-            const storageId = await ctx.storage.store(blob);
-
-            // Get the URL - note this will be a temporary signed URL
-            let fileUrl: string | null = null;
-            try {
-              fileUrl = await ctx.storage.getUrl(storageId);
-            } catch (error) {
-              console.error("Error getting storage URL:", error);
-              fileUrl = null;
-            }
-
-            // Format brief response message
-            const displayResults = results.results.slice(0, 3);
-            let response = `🔍 **Search for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"**\n`;
-            response += `📊 Found ${searchResult.resultCount} results (showing ${displayResults.length} below)\n\n`;
-
-            for (const result of displayResults) {
-              const breachName = result.breachName.substring(0, 40);
-              const matchField = result.matchedField.substring(0, 20);
-              const content = result.content.substring(0, 120);
-              
-              response += `**${breachName}**\n`;
-              response += `🎯 ${matchField} | `;
-              response += `📋 ${result.dataTypes.slice(0, 3).join(", ")}\n`;
-              response += `\`${content}${result.content.length > 120 ? "..." : ""}\`\n\n`;
-            }
-
-            if (fileUrl) {
-              response += `📎 **Complete results:** [Download File](${fileUrl})`;
-            } else {
-              response += `📎 **Complete results file created but URL unavailable**`;
-            }
-
-            return {
-              type: 4,
-              data: {
-                content: response,
-                flags: 64 // Ephemeral
-              }
-            };
-          } else {
-            // Format results for Discord with strict character limits (3 or fewer results)
-            const displayResults = results.results;
-            let response = `🔍 **Search for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"**\n`;
-            response += `📊 Found ${searchResult.resultCount} results\n\n`;
-
-            for (const result of displayResults) {
-              const breachName = result.breachName.substring(0, 40);
-              const matchField = result.matchedField.substring(0, 20);
-              const content = result.content.substring(0, 120);
-              
-              response += `**${breachName}**\n`;
-              response += `🎯 ${matchField} | `;
-              response += `📋 ${result.dataTypes.slice(0, 3).join(", ")}\n`;
-              response += `\`${content}${result.content.length > 120 ? "..." : ""}\`\n\n`;
-            }
-
-            // Ensure we don't exceed Discord's 2000 character limit
-            if (response.length > 1900) {
-              response = response.substring(0, 1900) + "...\n\n*Response truncated*";
-            }
-
-            return {
-              type: 4,
-              data: {
-                content: response,
-                flags: 64 // Ephemeral
-              }
-            };
+            response += '\n';
           }
+
+          if (searchResult.resultCount > 2) {
+            response += `*... and ${searchResult.resultCount - 2} more results*\n\n`;
+          }
+
+          // Add link to view all results on the web
+          const siteUrl = "https://insightful-mongoose-187.convex.site";
+          response += `🔗 **[View Full Results](${siteUrl}/results?id=${searchResult.searchId})**`;
+
+          // Ensure we don't exceed Discord's 2000 character limit
+          if (response.length > 1800) {
+            response = response.substring(0, 1800) + "...\n\n*Response truncated*";
+          }
+
+          return {
+            type: 4,
+            data: {
+              content: response,
+              flags: 64 // Ephemeral
+            }
+          };
         }
 
         case "stats": {
