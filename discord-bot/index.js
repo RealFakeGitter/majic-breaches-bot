@@ -231,11 +231,11 @@ client.on('interactionCreate', async interaction => {
             response = response.substring(0, 1700) + '...\n\n*Use the button below to view all results*';
           }
           
-          // Create button for full results
+          // Create button for full results - use web app URL, not Convex API URL
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Full Results')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${CONVEX_API_URL}/search-results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/search-results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
@@ -254,7 +254,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Online')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${CONVEX_API_URL}/search-results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/search-results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
