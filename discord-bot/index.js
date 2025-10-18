@@ -54,9 +54,9 @@ const client = new Client({
   ],
 });
 
-// Fixed URL construction - API calls go to Convex HTTP actions, web interface goes to Vercel
+// Fixed URL construction - API calls go to Convex HTTP actions, web interface goes to Convex site
 const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
-const WEB_APP_URL = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
+const WEB_APP_URL = process.env.WEB_APP_URL || 'https://insightful-mongoose-187.convex.site';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
