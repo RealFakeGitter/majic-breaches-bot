@@ -27,7 +27,23 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+// Start health server for Render
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ 
+    status: 'Discord bot running', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  }));
+});
+server.listen(PORT, () => {
+  console.log(`Health server running on port ${PORT}`);
+});
+
 require('./keep-alive');
 
 const client = new Client({
