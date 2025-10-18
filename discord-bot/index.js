@@ -54,16 +54,16 @@ const client = new Client({
   ],
 });
 
-// Fixed URL construction - API calls go to Convex, web interface goes to Vercel
-const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.cloud';
+// Fixed URL construction - API calls go to Convex HTTP actions, web interface goes to Vercel
+const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   console.log(`Convex API URL: ${CONVEX_API_URL}`);
   console.log(`Web App URL: ${WEB_APP_URL}`);
-  console.log(`Search API URL: ${CONVEX_API_URL}/api/search`);
-  console.log(`Stats API URL: ${CONVEX_API_URL}/api/stats`);
+  console.log(`Search API URL: ${CONVEX_API_URL}/search`);
+  console.log(`Stats API URL: ${CONVEX_API_URL}/stats`);
   
   const commands = [
     new SlashCommandBuilder()
@@ -141,7 +141,7 @@ client.on('interactionCreate', async interaction => {
       
       // Perform the search
       try {
-        const searchUrl = `${CONVEX_API_URL}/api/search`;
+        const searchUrl = `${CONVEX_API_URL}/search`;
         console.log(`Making request to: ${searchUrl}`);
         console.log('Request body:', JSON.stringify({
           query,
@@ -288,7 +288,7 @@ client.on('interactionCreate', async interaction => {
       }
       
       try {
-        const statsUrl = `${CONVEX_API_URL}/api/stats`;
+        const statsUrl = `${CONVEX_API_URL}/stats`;
         console.log(`Making stats request to: ${statsUrl}`);
         
         const statsResponse = await fetch(statsUrl, {
