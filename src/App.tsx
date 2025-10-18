@@ -1,17 +1,28 @@
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Toaster } from "sonner";
+import { Routes, Route } from "react-router-dom";
 import { BotInvites } from "./BotInvites";
 import { BreachSearch } from "./BreachSearch";
+import { ResultsPage } from "./ResultsPage";
+import { SearchResultsView } from "./SearchResultsView";
 
 export default function App() {
+  console.log("🚀 App component is rendering!");
+  console.log("Current URL:", window.location.href);
+  console.log("Current pathname:", window.location.pathname);
+  
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm h-16 flex justify-center items-center border-b shadow-sm">
         <h2 className="text-2xl font-bold text-blue-600">🔍 Majic Breaches Bot</h2>
       </header>
       <main className="flex-1 p-8">
-        <Content />
+        <Routes>
+          <Route path="/" element={<Content />} />
+          <Route path="/results" element={<ResultsPage />} />
+          <Route path="/search-results" element={<SearchResultsView />} />
+        </Routes>
       </main>
       <Toaster />
     </div>
@@ -20,6 +31,9 @@ export default function App() {
 
 function Content() {
   const botStats = useQuery(api.bots.getBotStats);
+  const allSearches = useQuery(api.breaches.getAllSearches);
+
+  console.log("All searches from database:", allSearches);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -54,6 +68,19 @@ function Content() {
             <div className="text-gray-600">Results Found</div>
           </div>
         </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="bg-gray-50 rounded-xl p-4 mb-8">
+        <h3 className="font-bold mb-2">Debug: Recent Searches</h3>
+        {allSearches && allSearches.length > 0 ? (
+          <div className="text-sm">
+            <p>Latest search: "{allSearches[0].query}" (ID: {allSearches[0]._id})</p>
+            <a href={`/results?searchId=${allSearches[0]._id}`} className="text-blue-600">Test Results Link</a>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No searches found</p>
+        )}
       </div>
 
       {/* Bot Invites */}
