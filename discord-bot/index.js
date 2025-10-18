@@ -1,4 +1,4 @@
-// Fixed Discord bot - immediate responses to prevent timeouts
+// Fixed Discord bot - better error handling and debugging
 const fs = require('fs');
 const path = require('path');
 
@@ -40,12 +40,13 @@ const client = new Client({
 
 // Use the correct Convex site URL for results links
 const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.cloud';
-const API_BASE_URL = process.env.CONVEX_URL.replace('/api', '');
+const API_BASE_URL = process.env.CONVEX_URL ? process.env.CONVEX_URL.replace('/api', '') : 'https://insightful-mongoose-187.convex.cloud';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   console.log(`API Base URL: ${API_BASE_URL}`);
   console.log(`Site URL: ${CONVEX_SITE_URL}`);
+  console.log(`Full API URL: ${API_BASE_URL}/api/search`);
   
   const commands = [
     new SlashCommandBuilder()
@@ -98,7 +99,10 @@ client.on('interactionCreate', async interaction => {
       
       // Perform the search in the background
       try {
-        const searchResponse = await fetch(`${API_BASE_URL}/api/search`, {
+        const searchUrl = `${API_BASE_URL}/api/search`;
+        console.log(`Making request to: ${searchUrl}`);
+        
+        const searchResponse = await fetch(searchUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -110,17 +114,20 @@ client.on('interactionCreate', async interaction => {
           }),
         });
 
+        console.log(`Response status: ${searchResponse.status}`);
+        console.log(`Response headers:`, Object.fromEntries(searchResponse.headers.entries()));
+
         if (!searchResponse.ok) {
           const errorText = await searchResponse.text();
-          console.error('Search API error:', errorText);
+          console.error('Search API error response:', errorText);
           await interaction.editReply({
-            content: `❌ Search failed: ${errorText.substring(0, 100)}`,
+            content: `❌ Search failed (${searchResponse.status}): ${errorText.substring(0, 100) || 'Unknown error'}`,
           });
           return;
         }
 
         const searchData = await searchResponse.json();
-        console.log('Search API response received');
+        console.log('Search API response received:', JSON.stringify(searchData, null, 2));
         
         if (!searchData.success || !searchData.results || searchData.results.length === 0) {
           await interaction.editReply({
@@ -169,7 +176,8 @@ client.on('interactionCreate', async interaction => {
         });
         
       } catch (searchError) {
-        console.error('Search error:', searchError);
+        console.error('Search error details:', searchError);
+        console.error('Search error stack:', searchError.stack);
         await interaction.editReply({
           content: `❌ Search failed: ${searchError.message.substring(0, 100)}`,
         });
@@ -183,8 +191,18 @@ client.on('interactionCreate', async interaction => {
       });
       
       try {
-        const statsResponse = await fetch(`${API_BASE_URL}/api/stats`);
+        const statsUrl = `${API_BASE_URL}/api/stats`;
+        console.log(`Making stats request to: ${statsUrl}`);
+        
+        const statsResponse = await fetch(statsUrl);
+        console.log(`Stats response status: ${statsResponse.status}`);
+        
+        if (!statsResponse.ok) {
+          throw new Error(`Stats API returned ${statsResponse.status}`);
+        }
+        
         const stats = await statsResponse.json();
+        console.log('Stats received:', stats);
         
         const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: ${stats.totalSearches.toLocaleString()}\n📋 Total Results: ${stats.totalResults.toLocaleString()}`;
         
@@ -220,6 +238,7 @@ client.on('interactionCreate', async interaction => {
     }
   } catch (error) {
     console.error('Command error:', error);
+    console.error('Command error stack:', error.stack);
     
     // Try to respond if we haven't already
     try {
