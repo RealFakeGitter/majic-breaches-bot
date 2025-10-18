@@ -31,36 +31,58 @@ require('dotenv').config();
 const { Client } = require('revolt.js');
 const { ConvexHttpClient } = require('convex/browser');
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL);
+// Import keep-alive functionality
+require('./keep-alive');
+
+// Validate environment variables
+const convexUrl = process.env.CONVEX_URL;
+if (!convexUrl) {
+  console.error('❌ No CONVEX_URL found! Please set CONVEX_URL environment variable.');
+  process.exit(1);
+}
+
+console.log(`🔗 Connecting to Convex: ${convexUrl}`);
+const convex = new ConvexHttpClient(convexUrl);
 
 const client = new Client();
 
 client.on('ready', async () => {
-  console.log(`Logged in as ${client.user.username}!`);
+  console.log(`✅ Logged in as ${client.user.username}!`);
+  console.log(`🤖 Bot ID: ${client.user._id}`);
+  console.log(`🔗 Connected to ${client.servers.size} servers`);
+  console.log('🎯 Ready to receive commands!');
 });
 
 client.on('message', async (message) => {
-  console.log(`Received message: "${message.content}" from ${message.author?.username}`);
+  // Enhanced logging for debugging
+  console.log(`📨 Message received:`);
+  console.log(`  Content: "${message.content}"`);
+  console.log(`  Author: ${message.author?.username} (ID: ${message.author?._id})`);
+  console.log(`  Channel: ${message.channel?._id}`);
+  console.log(`  Is Bot: ${message.author?.bot}`);
   
   // Ignore messages from bots
   if (message.author?.bot) {
-    console.log('Ignoring bot message');
+    console.log('🤖 Ignoring bot message');
     return;
   }
   
   // Only respond to messages that start with !breach
   if (!message.content?.startsWith('!breach')) {
-    console.log('Message does not start with !breach');
+    console.log('❌ Message does not start with !breach');
     return;
   }
   
-  console.log('Processing !breach command');
+  console.log('✅ Processing !breach command');
   
   const args = message.content.slice(7).trim().split(/ +/);
   const command = args.shift()?.toLowerCase();
   
   try {
-    if (command === 'search') {
+    if (command === 'ping') {
+      await message.reply('🏓 Pong! Bot is working!');
+      return;
+    } else if (command === 'search') {
       if (args.length === 0) {
         await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
         return;
@@ -142,7 +164,7 @@ client.on('message', async (message) => {
       await message.reply(response);
       
     } else if (command === 'help') {
-      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
+      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach ping\` - Test bot connection\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
       
       await message.reply(response);
     } else {
@@ -154,7 +176,27 @@ client.on('message', async (message) => {
   }
 });
 
-client.loginBot(process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN);
+// Enhanced error handling and logging
+client.on('error', (error) => {
+  console.error('Revolt client error:', error);
+});
+
+client.on('disconnect', () => {
+  console.log('Disconnected from Revolt');
+});
+
+// Login with better error handling
+const token = process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN;
+if (!token) {
+  console.error('❌ No bot token found! Please set REVOLT_BOT_TOKEN environment variable.');
+  process.exit(1);
+}
+
+console.log('🔄 Attempting to login to Revolt...');
+client.loginBot(token).catch(error => {
+  console.error('❌ Failed to login to Revolt:', error);
+  process.exit(1);
+});
 
 /*
 PACKAGE.JSON CONTENT FOR REVOLT BOT:
