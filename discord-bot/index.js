@@ -235,7 +235,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Full Results')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/results?searchId=${searchData.searchId}`);
+            .setURL(`${CONVEX_API_URL}/search-results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
@@ -254,7 +254,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Online')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/results?searchId=${searchData.searchId}`);
+            .setURL(`${CONVEX_API_URL}/search-results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
