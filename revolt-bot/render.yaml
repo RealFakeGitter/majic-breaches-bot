@@ -3,12 +3,13 @@ services:
     name: majic-breaches-revolt-bot
     env: node
     plan: free
-    buildCommand: npm install
+    region: oregon
+    buildCommand: npm install --production
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: REVOLT_BOT_TOKEN
-        sync: false
-      - key: CONVEX_URL
-        sync: false
+      - key: PORT
+        value: 3000
+    autoDeploy: false
