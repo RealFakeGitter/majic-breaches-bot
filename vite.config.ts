@@ -4,6 +4,8 @@ import path from "path";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  root: ".",
+  base: "/",
   plugins: [
     react(),
     // The code below enables dev tools like taking screenshots of your site
@@ -39,5 +41,9 @@ window.addEventListener('message', async (message) => {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  publicDir: "public",
+  build: {
+    outDir: "dist",
   },
 }));
