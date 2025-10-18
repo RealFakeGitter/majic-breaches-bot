@@ -5,9 +5,9 @@ const path = require('path');
 const packageJsonPath = path.join(__dirname, 'package.json');
 if (!fs.existsSync(packageJsonPath)) {
   const packageJson = {
-    "name": "majic-breaches-revolt-bot",
+    "name": "majic-breaches-discord-bot",
     "version": "1.0.0",
-    "description": "Revolt bot for Majic Breaches search",
+    "description": "Discord bot for Majic Breaches search",
     "main": "index.js",
     "scripts": {
       "start": "node index.js",
@@ -15,7 +15,7 @@ if (!fs.existsSync(packageJsonPath)) {
       "build": "echo 'No build step required'"
     },
     "dependencies": {
-      "revolt.js": "^7.2.0",
+      "discord.js": "^14.22.1",
       "convex": "^1.28.0",
       "dotenv": "^16.6.1"
     },
@@ -28,137 +28,222 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 
 require('dotenv').config();
-const { Client } = require('revolt.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { ConvexHttpClient } = require('convex/browser');
+
+// Import keep-alive functionality
+require('./keep-alive');
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
-const client = new Client();
+client.once('ready', async () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+  
+  // Register slash commands
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('search')
+      .setDescription('Search data breaches')
+      .addStringOption(option =>
+        option.setName('query')
+          .setDescription('Search term (email, username, etc.)')
+          .setRequired(true))
+      .addIntegerOption(option =>
+        option.setName('limit')
+          .setDescription('Maximum number of results (default: 10)')
+          .setRequired(false)),
+    
+    new SlashCommandBuilder()
+      .setName('stats')
+      .setDescription('Show bot statistics'),
+    
+    new SlashCommandBuilder()
+      .setName('help')
+      .setDescription('Show help information'),
+  ];
 
-client.on('ready', async () => {
-  console.log(`Logged in as ${client.user.username}!`);
+  try {
+    console.log('Started refreshing application (/) commands.');
+    await client.application.commands.set(commands);
+    console.log('Successfully reloaded application (/) commands.');
+  } catch (error) {
+    console.error('Error registering commands:', error);
+  }
 });
 
-client.on('message', async (message) => {
-  // Ignore messages from bots
-  if (message.author?.bot) return;
-  
-  // Only respond to messages that start with !breach
-  if (!message.content?.startsWith('!breach')) return;
-  
-  const args = message.content.slice(7).trim().split(/ +/);
-  const command = args.shift()?.toLowerCase();
-  
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName } = interaction;
+
   try {
-    if (command === 'search') {
-      if (args.length === 0) {
-        await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
-        return;
-      }
+    if (commandName === 'search') {
+      await interaction.deferReply();
       
-      const query = args.join(' ');
-      console.log(`Revolt search: ${query}`);
+      const query = interaction.options.getString('query');
+      const limit = interaction.options.getInteger('limit') || 10;
+      
+      console.log(`Discord search: ${query} (limit: ${limit})`);
       
       const searchResult = await convex.action('breaches:searchBreaches', {
         query,
-        limit: 10,
+        limit,
       });
       
       const result = await convex.query('breaches:getSearchResults', {
         searchId: searchResult.searchId,
       });
       
+      // Debug: Log the first result to see what we're getting
+      if (result && result.results.length > 0) {
+        console.log('First breach result:', JSON.stringify(result.results[0], null, 2));
+      }
+      
       if (!result) {
-        await message.reply(`❌ Error: Search results not found`);
+        await interaction.editReply({
+          content: `❌ Error: Search results not found`,
+          ephemeral: true
+        });
         return;
       }
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🔍 Breach Search Results')
+        .setColor(0x3B82F6)
+        .setTimestamp();
       
       if (result.results.length === 0) {
-        await message.reply(`🔍 No results found for: **${query}**`);
-        return;
-      }
-      
-      const preview = result.results.slice(0, 2); // Reduce to 2 results for better formatting
-      let response = `🔍 **Breach Search Results**\n\nFound **${result.results.length}** results for: **${query}**\n\n`;
-      
-      preview.forEach((breach, index) => {
-        // Truncate breach name if it's too long
-        const truncatedBreachName = breach.breachName.length > 200 
-          ? breach.breachName.substring(0, 200) + '...' 
-          : breach.breachName;
+        embed.setDescription(`No results found for: **${query}**`);
+      } else {
+        const preview = result.results.slice(0, 2); // Reduce to 2 results to fit more content
+        let description = `Found **${result.results.length}** results for: **${query}**\n\n`;
         
-        response += `**${index + 1}. ${truncatedBreachName}**\n`;
-        if (breach.breachDate) {
-          response += `📅 Date: ${breach.breachDate}\n`;
-        }
-        response += `🎯 Matched Field: ${breach.matchedField}\n`;
-        response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
-        
-        // Show the actual breach content (email, password, etc.) with better formatting
-        if (breach.content) {
-          response += `\n**🔍 Breach Data:**\n`;
-          const contentLines = breach.content.split('\n').filter(line => line.trim());
-          // Limit to first 8 lines for Revolt (more generous than Discord)
-          const limitedLines = contentLines.slice(0, 8);
-          limitedLines.forEach(line => {
-            response += `\`${line}\`\n`;
-          });
-          if (contentLines.length > 8) {
-            response += `*... and ${contentLines.length - 8} more lines*\n`;
+        preview.forEach((breach, index) => {
+          // Truncate breach name if it's too long for Discord
+          const truncatedBreachName = breach.breachName.length > 200 
+            ? breach.breachName.substring(0, 200) + '...' 
+            : breach.breachName;
+          
+          description += `**${index + 1}. ${truncatedBreachName}**\n`;
+          if (breach.breachDate) {
+            description += `📅 Date: ${breach.breachDate}\n`;
           }
+          description += `🎯 Matched Field: ${breach.matchedField}\n`;
+          description += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
+          
+          // Show the actual breach content (email, password, etc.) with better formatting
+          if (breach.content) {
+            description += `\n**🔍 Breach Data:**\n`;
+            const contentLines = breach.content.split('\n').filter(line => line.trim());
+            // Limit to first 5 lines to prevent overflow
+            const limitedLines = contentLines.slice(0, 5);
+            limitedLines.forEach(line => {
+              // Format each line in a code block for better readability
+              description += `\`${line}\`\n`;
+            });
+            if (contentLines.length > 5) {
+              description += `*... and ${contentLines.length - 5} more lines*\n`;
+            }
+          }
+          
+          if (breach.recordCount) {
+            description += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
+          }
+          description += '\n';
+        });
+        
+        if (result.results.length > 2) {
+          description += `*... and ${result.results.length - 2} more results*\n\n`;
         }
         
-        if (breach.recordCount) {
-          response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
+        // Use the corrected URL format with query parameter
+        description += `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})`;
+        
+        // Ensure description doesn't exceed Discord's 4096 character limit
+        if (description.length > 4000) {
+          description = description.substring(0, 3900) + '...\n\n' + `[🔗 **View Full Results**](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})`;
         }
-        response += '\n';
-      });
-      
-      if (result.results.length > 2) {
-        response += `*... and ${result.results.length - 2} more results*\n\n`;
+        
+        embed.setDescription(description);
+        embed.setFooter({ 
+          text: `${result.results.length} total results • Use responsibly` 
+        });
       }
       
-      // Use the corrected URL format with query parameter
-      response += `🔗 **[View Full Results](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})**\n\n`;
-      response += `⚠️ *Use responsibly for security research purposes only*`;
+      await interaction.editReply({ embeds: [embed] });
       
-      await message.reply(response);
+    } else if (commandName === 'stats') {
+      await interaction.deferReply();
       
-    } else if (command === 'stats') {
       const stats = await convex.query('bots:getBotStats');
       
-      const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
+      const embed = new EmbedBuilder()
+        .setTitle('📊 Bot Statistics')
+        .setColor(0x10B981)
+        .addFields(
+          { name: '🔍 Total Searches', value: stats.totalSearches.toLocaleString(), inline: true },
+          { name: '📋 Total Results', value: stats.totalResults.toLocaleString(), inline: true }
+        )
+        .setTimestamp();
       
-      await message.reply(response);
+      await interaction.editReply({ embeds: [embed] });
       
-    } else if (command === 'help') {
-      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
+    } else if (commandName === 'help') {
+      const embed = new EmbedBuilder()
+        .setTitle('🤖 Majic Breaches Bot Help')
+        .setColor(0x6366F1)
+        .setDescription('Search data breaches for security research and OSINT purposes.')
+        .addFields(
+          { 
+            name: '🔍 Commands', 
+            value: '`/search <query> [limit]` - Search breaches\n`/stats` - Show statistics\n`/help` - Show this help', 
+            inline: false 
+          },
+          { 
+            name: '⚠️ Important', 
+            value: 'This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.', 
+            inline: false 
+          }
+        )
+        .setTimestamp();
       
-      await message.reply(response);
-    } else {
-      await message.reply('❌ Unknown command. Use `!breach help` for available commands.');
+      await interaction.editReply({ embeds: [embed] });
     }
   } catch (error) {
     console.error('Command error:', error);
-    await message.reply('❌ An error occurred while processing your request.');
+    const errorMessage = '❌ An error occurred while processing your request.';
+    
+    if (interaction.deferred) {
+      await interaction.editReply({ content: errorMessage, ephemeral: true });
+    } else {
+      await interaction.reply({ content: errorMessage, ephemeral: true });
+    }
   }
 });
 
-client.loginBot(process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN);
 
 /*
-PACKAGE.JSON CONTENT FOR REVOLT BOT:
+PACKAGE.JSON CONTENT FOR DISCORD BOT:
 {
-  "name": "majic-breaches-revolt-bot",
+  "name": "majic-breaches-discord-bot",
   "version": "1.0.0",
-  "description": "Revolt bot for Majic Breaches search",
+  "description": "Discord bot for Majic Breaches search",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js"
   },
   "dependencies": {
-    "revolt.js": "^7.2.0",
+    "discord.js": "^14.22.1",
     "convex": "^1.28.0",
     "dotenv": "^16.6.1"
   },
