@@ -27,7 +27,7 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionType } = require('discord.js');
 
 // Start health server for Render
 const http = require('http');
@@ -119,13 +119,10 @@ client.on('interactionCreate', async interaction => {
       
       console.log(`Discord search: ${query} (limit: ${limit}, format: ${format})`);
       
-      // Respond immediately with a simple message to avoid timeout
-      await interaction.reply({
-        content: `🔍 Searching for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"... Please wait.`,
-        ephemeral: true
-      });
+      // Use deferReply instead of reply to give us more time
+      await interaction.deferReply({ ephemeral: true });
       
-      // Perform the search in the background
+      // Perform the search
       try {
         const searchUrl = `${CONVEX_URL}/api/search`;
         console.log(`Making request to: ${searchUrl}`);
@@ -250,11 +247,8 @@ client.on('interactionCreate', async interaction => {
       }
       
     } else if (commandName === 'stats') {
-      // Respond immediately
-      await interaction.reply({
-        content: '📊 Getting statistics...',
-        ephemeral: true
-      });
+      // Use deferReply for stats too
+      await interaction.deferReply({ ephemeral: true });
       
       try {
         const statsUrl = `${CONVEX_URL}/api/stats`;
@@ -322,7 +316,7 @@ client.on('interactionCreate', async interaction => {
           content: '❌ An error occurred while processing your request.', 
           ephemeral: true 
         });
-      } else if (interaction.deferred || interaction.replied) {
+      } else if (interaction.deferred) {
         await interaction.editReply({ 
           content: '❌ An error occurred while processing your request.' 
         });
