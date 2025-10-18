@@ -54,16 +54,16 @@ const client = new Client({
   ],
 });
 
-// Fixed URL construction - HTTP endpoints use .convex.site, not .convex.cloud
-const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || 'https://insightful-mongoose-187.convex.site';
-const CONVEX_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
+// Fixed URL construction - API calls go to Convex, web interface goes to Vercel
+const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
+const WEB_APP_URL = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
-  console.log(`Convex URL: ${CONVEX_URL}`);
-  console.log(`Site URL: ${CONVEX_SITE_URL}`);
-  console.log(`Search API URL: ${CONVEX_URL}/api/search`);
-  console.log(`Stats API URL: ${CONVEX_URL}/api/stats`);
+  console.log(`Convex API URL: ${CONVEX_API_URL}`);
+  console.log(`Web App URL: ${WEB_APP_URL}`);
+  console.log(`Search API URL: ${CONVEX_API_URL}/api/search`);
+  console.log(`Stats API URL: ${CONVEX_API_URL}/api/stats`);
   
   const commands = [
     new SlashCommandBuilder()
@@ -124,7 +124,7 @@ client.on('interactionCreate', async interaction => {
       
       // Perform the search
       try {
-        const searchUrl = `${CONVEX_URL}/api/search`;
+        const searchUrl = `${CONVEX_API_URL}/api/search`;
         console.log(`Making request to: ${searchUrl}`);
         
         const searchResponse = await fetch(searchUrl, {
@@ -208,7 +208,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Full Results')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
@@ -227,7 +227,7 @@ client.on('interactionCreate', async interaction => {
           const viewButton = new ButtonBuilder()
             .setLabel('🔗 View Online')
             .setStyle(ButtonStyle.Link)
-            .setURL(`${CONVEX_SITE_URL}/results?id=${searchData.searchId}`);
+            .setURL(`${WEB_APP_URL}/results?id=${searchData.searchId}`);
           
           const row = new ActionRowBuilder().addComponents(viewButton);
           
@@ -251,7 +251,7 @@ client.on('interactionCreate', async interaction => {
       await interaction.deferReply({ ephemeral: true });
       
       try {
-        const statsUrl = `${CONVEX_URL}/api/stats`;
+        const statsUrl = `${CONVEX_API_URL}/api/stats`;
         console.log(`Making stats request to: ${statsUrl}`);
         
         const statsResponse = await fetch(statsUrl);
