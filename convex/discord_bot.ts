@@ -102,7 +102,7 @@ export const handleDiscordCommand = action({
           }
 
           // Add link to view all results on the web
-          const siteUrl = "https://insightful-mongoose-187.convex.site";
+          const siteUrl = "https://insightful-mongoose-187.convex.app";
           response += `🔗 **[View Full Results](${siteUrl}/results?id=${searchResult.searchId})**`;
 
           // Ensure we don't exceed Discord's 2000 character limit
