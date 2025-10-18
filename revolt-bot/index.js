@@ -44,16 +44,44 @@ if (!convexUrl) {
 console.log(`🔗 Connecting to Convex: ${convexUrl}`);
 const convex = new ConvexHttpClient(convexUrl);
 
-const client = new Client();
+const client = new Client({
+  unreads: true,
+  autoReconnect: true,
+});
 
 client.on('ready', async () => {
   console.log(`✅ Logged in as ${client.user?.username || 'Unknown'}!`);
   console.log(`🤖 Bot ID: ${client.user?._id || 'Unknown'}`);
   console.log(`🔗 Connected to ${client.servers?.size || 0} servers`);
+  
+  // List all servers and channels for debugging
+  if (client.servers) {
+    console.log('📋 Server details:');
+    for (const [serverId, server] of client.servers) {
+      console.log(`  Server: ${server.name} (ID: ${serverId})`);
+      if (server.channels) {
+        for (const [channelId, channel] of server.channels) {
+          console.log(`    Channel: ${channel.name} (ID: ${channelId})`);
+        }
+      }
+    }
+  }
+  
   console.log('🎯 Ready to receive commands!');
 });
 
+// Try both message events
 client.on('message', async (message) => {
+  console.log('📨 "message" event triggered');
+  await handleMessage(message);
+});
+
+client.on('messageCreate', async (message) => {
+  console.log('📨 "messageCreate" event triggered');
+  await handleMessage(message);
+});
+
+async function handleMessage(message) {
   // Enhanced logging for debugging
   console.log(`📨 Message received:`);
   console.log(`  Content: "${message.content || 'No content'}"`);
@@ -192,7 +220,7 @@ client.on('message', async (message) => {
       console.error('Failed to send error reply:', replyError);
     }
   }
-});
+}
 
 // Enhanced error handling and logging
 client.on('error', (error) => {
@@ -202,6 +230,30 @@ client.on('error', (error) => {
 client.on('disconnect', () => {
   console.log('Disconnected from Revolt');
 });
+
+// Add more debugging events
+client.on('packet', (packet) => {
+  if (packet.type === 'Message') {
+    console.log('📦 Raw message packet received:', JSON.stringify(packet, null, 2));
+  }
+});
+
+client.on('messageCreate', (message) => {
+  console.log('🆕 messageCreate event fired:', message.content);
+});
+
+client.on('messageUpdate', (message) => {
+  console.log('📝 messageUpdate event fired:', message.content);
+});
+
+// Log all events for debugging
+const originalEmit = client.emit;
+client.emit = function(event, ...args) {
+  if (event !== 'packet') { // Don't log packet events to avoid spam
+    console.log(`🎪 Event fired: ${event}`);
+  }
+  return originalEmit.call(this, event, ...args);
+};
 
 // Login with better error handling
 const token = process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN;
