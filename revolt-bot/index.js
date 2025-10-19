@@ -88,9 +88,9 @@ async function handleMessage(message) {
   console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
   console.log(`  Is Bot: ${message.author?.bot || false}`);
   
-  // Ignore messages from bots
-  if (message.author?.bot) {
-    console.log('🤖 Ignoring bot message');
+  // Ignore messages from bots (including our own messages)
+  if (message.author?.bot || message.author?._id === client.user?._id) {
+    console.log('🤖 Ignoring bot message or own message');
     return;
   }
   
