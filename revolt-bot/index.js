@@ -17,8 +17,7 @@ if (!fs.existsSync(packageJsonPath)) {
     "dependencies": {
       "revolt.js": "^7.2.0",
       "convex": "^1.28.0",
-      "dotenv": "^16.6.1",
-      "node-fetch": "^3.3.2"
+      "dotenv": "^16.6.1"
     },
     "engines": {
       "node": ">=18.0.0"
@@ -30,7 +29,6 @@ if (!fs.existsSync(packageJsonPath)) {
 
 require('dotenv').config();
 const { Client } = require('revolt.js');
-const fetch = require('node-fetch');
 
 // Import keep-alive functionality
 try {
@@ -137,97 +135,107 @@ async function handleMessage(message) {
       const query = args.join(' ');
       console.log(`Revolt search: ${query}`);
       
-      // Use the correct HTTP endpoint
+      // Use the correct HTTP endpoint with native fetch
       const searchUrl = `${convexUrl}/api/search`;
       console.log(`Making request to: ${searchUrl}`);
       
-      const searchResponse = await fetch(searchUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query,
-          limit: 10,
-          platform: 'revolt'
-        }),
-      });
+      try {
+        const searchResponse = await fetch(searchUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query,
+            limit: 10,
+            platform: 'revolt'
+          }),
+        });
 
-      if (!searchResponse.ok) {
-        const errorText = await searchResponse.text();
-        console.error('Search API error:', errorText);
-        await message.reply(`❌ Search failed: ${errorText}`);
-        return;
-      }
-
-      const searchData = await searchResponse.json();
-      
-      if (!searchData.success || !searchData.results || searchData.results.length === 0) {
-        await message.reply(`🔍 No results found for: **${query}**`);
-        return;
-      }
-      
-      const preview = searchData.results.slice(0, 2);
-      let response = `🔍 **Breach Search Results**\n\nFound **${searchData.resultCount}** results for: **${query}**\n\n`;
-      
-      preview.forEach((breach, index) => {
-        // Truncate breach name if it's too long
-        const truncatedBreachName = breach.breachName.length > 200 
-          ? breach.breachName.substring(0, 200) + '...' 
-          : breach.breachName;
-        
-        response += `**${index + 1}. ${truncatedBreachName}**\n`;
-        if (breach.breachDate) {
-          response += `📅 Date: ${breach.breachDate}\n`;
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text();
+          console.error('Search API error:', errorText);
+          await message.reply(`❌ Search failed: ${errorText}`);
+          return;
         }
-        response += `🎯 Matched Field: ${breach.matchedField}\n`;
-        response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
+
+        const searchData = await searchResponse.json();
         
-        // Show the actual breach content (email, password, etc.) with better formatting
-        if (breach.content) {
-          response += `\n**🔍 Breach Data:**\n`;
-          const contentLines = breach.content.split('\n').filter(line => line.trim());
-          // Limit to first 8 lines for Revolt (more generous than Discord)
-          const limitedLines = contentLines.slice(0, 8);
-          limitedLines.forEach(line => {
-            response += `\`${line}\`\n`;
-          });
-          if (contentLines.length > 8) {
-            response += `*... and ${contentLines.length - 8} more lines*\n`;
+        if (!searchData.success || !searchData.results || searchData.results.length === 0) {
+          await message.reply(`🔍 No results found for: **${query}**`);
+          return;
+        }
+        
+        const preview = searchData.results.slice(0, 2);
+        let response = `🔍 **Breach Search Results**\n\nFound **${searchData.resultCount}** results for: **${query}**\n\n`;
+        
+        preview.forEach((breach, index) => {
+          // Truncate breach name if it's too long
+          const truncatedBreachName = breach.breachName.length > 200 
+            ? breach.breachName.substring(0, 200) + '...' 
+            : breach.breachName;
+          
+          response += `**${index + 1}. ${truncatedBreachName}**\n`;
+          if (breach.breachDate) {
+            response += `📅 Date: ${breach.breachDate}\n`;
           }
+          response += `🎯 Matched Field: ${breach.matchedField}\n`;
+          response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
+          
+          // Show the actual breach content (email, password, etc.) with better formatting
+          if (breach.content) {
+            response += `\n**🔍 Breach Data:**\n`;
+            const contentLines = breach.content.split('\n').filter(line => line.trim());
+            // Limit to first 8 lines for Revolt (more generous than Discord)
+            const limitedLines = contentLines.slice(0, 8);
+            limitedLines.forEach(line => {
+              response += `\`${line}\`\n`;
+            });
+            if (contentLines.length > 8) {
+              response += `*... and ${contentLines.length - 8} more lines*\n`;
+            }
+          }
+          
+          if (breach.recordCount) {
+            response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
+          }
+          response += '\n';
+        });
+        
+        if (searchData.resultCount > 2) {
+          response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
         }
         
-        if (breach.recordCount) {
-          response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
-        }
-        response += '\n';
-      });
-      
-      if (searchData.resultCount > 2) {
-        response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
+        // Use the web app URL for results page
+        const webAppUrl = process.env.WEB_APP_URL || process.env.CONVEX_SITE_URL || 'https://majic-breaches-bot.vercel.app';
+        response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
+        response += `⚠️ *Use responsibly for security research purposes only*`;
+        
+        await message.reply(response);
+      } catch (fetchError) {
+        console.error('Fetch error:', fetchError);
+        await message.reply('❌ Failed to connect to search service');
       }
-      
-      // Use the web app URL for results page
-      const webAppUrl = process.env.WEB_APP_URL || process.env.CONVEX_SITE_URL || 'https://majic-breaches-bot.vercel.app';
-      response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
-      response += `⚠️ *Use responsibly for security research purposes only*`;
-      
-      await message.reply(response);
       
     } else if (command === 'stats') {
-      const statsUrl = `${convexUrl}/api/stats`;
-      const statsResponse = await fetch(statsUrl);
-      
-      if (!statsResponse.ok) {
+      try {
+        const statsUrl = `${convexUrl}/api/stats`;
+        const statsResponse = await fetch(statsUrl);
+        
+        if (!statsResponse.ok) {
+          await message.reply('❌ Failed to get statistics');
+          return;
+        }
+        
+        const stats = await statsResponse.json();
+        
+        const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
+        
+        await message.reply(response);
+      } catch (fetchError) {
+        console.error('Stats fetch error:', fetchError);
         await message.reply('❌ Failed to get statistics');
-        return;
       }
-      
-      const stats = await statsResponse.json();
-      
-      const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
-      
-      await message.reply(response);
       
     } else if (command === 'help') {
       const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach ping\` - Test bot connection\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
@@ -313,8 +321,7 @@ PACKAGE.JSON CONTENT FOR REVOLT BOT:
   "dependencies": {
     "revolt.js": "^7.2.0",
     "convex": "^1.28.0",
-    "dotenv": "^16.6.1",
-    "node-fetch": "^3.3.2"
+    "dotenv": "^16.6.1"
   },
   "engines": {
     "node": ">=18.0.0"
