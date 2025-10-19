@@ -162,7 +162,7 @@ async function handleMessage(message) {
       
       const requestBody = {
         query,
-        limit: 10,
+        limit: 100, // Fixed: Changed from 10 to 100 to meet API minimum requirement
         platform: 'revolt'
       };
       console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
