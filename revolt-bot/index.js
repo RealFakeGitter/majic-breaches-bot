@@ -74,14 +74,9 @@ client.on('ready', async () => {
   console.log('🎯 Ready to receive commands!');
 });
 
-// Try both message events
+// Use only one message event to avoid duplicates
 client.on('message', async (message) => {
   console.log('📨 "message" event triggered');
-  await handleMessage(message);
-});
-
-client.on('messageCreate', async (message) => {
-  console.log('📨 "messageCreate" event triggered');
   await handleMessage(message);
 });
 
@@ -153,7 +148,7 @@ async function handleMessage(message) {
       
       const requestBody = {
         query,
-        limit: 10, // Use same limit as Discord and web
+        limit: 100, // API requires minimum 100
         platform: 'revolt'
       };
       console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
@@ -303,7 +298,8 @@ client.on('packet', (packet) => {
 });
 
 client.on('messageCreate', (message) => {
-  console.log('🆕 messageCreate event fired:', message.content);
+  // Remove duplicate messageCreate handler to avoid triple responses
+  console.log('🆕 messageCreate event fired (logging only):', message.content);
 });
 
 client.on('messageUpdate', (message) => {
