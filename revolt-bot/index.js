@@ -17,7 +17,8 @@ if (!fs.existsSync(packageJsonPath)) {
     "dependencies": {
       "revolt.js": "^7.2.0",
       "convex": "^1.28.0",
-      "dotenv": "^16.6.1"
+      "dotenv": "^16.6.1",
+      "node-fetch": "^3.3.2"
     },
     "engines": {
       "node": ">=18.0.0"
@@ -29,6 +30,26 @@ if (!fs.existsSync(packageJsonPath)) {
 
 require('dotenv').config();
 const { Client } = require('revolt.js');
+
+// Import fetch for Node.js compatibility
+let fetch;
+try {
+  // Try to use native fetch (Node 18+)
+  fetch = globalThis.fetch;
+  if (!fetch) {
+    throw new Error('No native fetch');
+  }
+  console.log('✅ Using native fetch');
+} catch (error) {
+  // Fallback to node-fetch for older Node versions
+  try {
+    fetch = require('node-fetch');
+    console.log('✅ Using node-fetch');
+  } catch (fetchError) {
+    console.error('❌ No fetch implementation available. Please install node-fetch or use Node 18+');
+    process.exit(1);
+  }
+}
 
 // Import keep-alive functionality
 try {
@@ -135,9 +156,16 @@ async function handleMessage(message) {
       const query = args.join(' ');
       console.log(`Revolt search: ${query}`);
       
-      // Use the correct HTTP endpoint with native fetch
+      // Use the correct HTTP endpoint with fetch
       const searchUrl = `${convexUrl}/api/search`;
       console.log(`Making request to: ${searchUrl}`);
+      
+      const requestBody = {
+        query,
+        limit: 10,
+        platform: 'revolt'
+      };
+      console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
       
       try {
         const searchResponse = await fetch(searchUrl, {
@@ -145,12 +173,11 @@ async function handleMessage(message) {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            query,
-            limit: 10,
-            platform: 'revolt'
-          }),
+          body: JSON.stringify(requestBody),
         });
+
+        console.log('🔍 Response status:', searchResponse.status);
+        console.log('🔍 Response ok:', searchResponse.ok);
 
         if (!searchResponse.ok) {
           const errorText = await searchResponse.text();
@@ -161,8 +188,15 @@ async function handleMessage(message) {
 
         const searchData = await searchResponse.json();
         
+        // Debug logging to see what we're getting
+        console.log('🔍 Search API Response:', JSON.stringify(searchData, null, 2));
+        console.log('🔍 searchData.success:', searchData.success);
+        console.log('🔍 searchData.results:', searchData.results);
+        console.log('🔍 searchData.results.length:', searchData.results?.length);
+        
         if (!searchData.success || !searchData.results || searchData.results.length === 0) {
-          await message.reply(`🔍 No results found for: **${query}**`);
+          console.log('❌ No results condition triggered');
+          await message.reply(`🔍 No results found for: **${query}**\n\nDebug info:\n- Success: ${searchData.success}\n- Results: ${searchData.results ? searchData.results.length : 'null'}\n- Error: ${searchData.error || 'none'}`);
           return;
         }
         
@@ -206,8 +240,8 @@ async function handleMessage(message) {
           response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
         }
         
-        // Use the web app URL for results page
-        const webAppUrl = process.env.WEB_APP_URL || process.env.CONVEX_SITE_URL || 'https://majic-breaches-bot.vercel.app';
+        // Use the correct web app URL - prioritize WEB_APP_URL, then fallback to a default
+        const webAppUrl = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
         response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
         response += `⚠️ *Use responsibly for security research purposes only*`;
         
@@ -321,7 +355,8 @@ PACKAGE.JSON CONTENT FOR REVOLT BOT:
   "dependencies": {
     "revolt.js": "^7.2.0",
     "convex": "^1.28.0",
-    "dotenv": "^16.6.1"
+    "dotenv": "^16.6.1",
+    "node-fetch": "^3.3.2"
   },
   "engines": {
     "node": ">=18.0.0"
