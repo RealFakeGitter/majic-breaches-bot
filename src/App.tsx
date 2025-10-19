@@ -70,18 +70,7 @@ function Content() {
         </div>
       </div>
 
-      {/* Debug Info */}
-      <div className="bg-gray-50 rounded-xl p-4 mb-8">
-        <h3 className="font-bold mb-2">Debug: Recent Searches</h3>
-        {allSearches && allSearches.length > 0 ? (
-          <div className="text-sm">
-            <p>Latest search: "{allSearches[0].query}" (ID: {allSearches[0]._id})</p>
-            <a href={`/results?searchId=${allSearches[0]._id}`} className="text-blue-600">Test Results Link</a>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">No searches found</p>
-        )}
-      </div>
+
 
       {/* Bot Invites */}
       <BotInvites />
