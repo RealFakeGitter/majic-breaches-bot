@@ -1,318 +1,201 @@
-// Auto-generate package.json if it doesn't exist
-const fs = require('fs');
-const path = require('path');
+import { useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { Toaster } from "sonner";
+import { Routes, Route } from "react-router-dom";
+import { BotInvites } from "./BotInvites";
+import { BreachSearch } from "./BreachSearch";
+import { ResultsPage } from "./ResultsPage";
+import { SearchResultsView } from "./SearchResultsView";
 
-const packageJsonPath = path.join(__dirname, 'package.json');
-if (!fs.existsSync(packageJsonPath)) {
-  const packageJson = {
-    "name": "majic-breaches-revolt-bot",
-    "version": "1.0.0",
-    "description": "Revolt bot for Majic Breaches search",
-    "main": "index.js",
-    "scripts": {
-      "start": "node index.js",
-      "dev": "node index.js",
-      "build": "echo 'No build step required'"
-    },
-    "dependencies": {
-      "revolt.js": "^7.2.0",
-      "convex": "^1.28.0",
-      "dotenv": "^16.6.1"
-    },
-    "engines": {
-      "node": ">=18.0.0"
-    }
-  };
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-  console.log('Generated package.json');
+export default function App() {
+  console.log("🚀 App component is rendering!");
+  console.log("Current URL:", window.location.href);
+  console.log("Current pathname:", window.location.pathname);
+  
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
+      <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm h-16 flex justify-center items-center border-b shadow-sm">
+        <h2 className="text-2xl font-bold text-blue-600">🔍 Majic Breaches Bot</h2>
+      </header>
+      <main className="flex-1 p-8">
+        <Routes>
+          <Route path="/" element={<Content />} />
+          <Route path="/results" element={<ResultsPage />} />
+          <Route path="/search-results" element={<SearchResultsView />} />
+        </Routes>
+      </main>
+      <Toaster />
+    </div>
+  );
 }
 
-require('dotenv').config();
-const { Client } = require('revolt.js');
-const { ConvexHttpClient } = require('convex/browser');
+function Content() {
+  const botStats = useQuery(api.bots.getBotStats);
+  const allSearches = useQuery(api.breaches.getAllSearches);
 
-// Import keep-alive functionality
-require('./keep-alive');
+  console.log("All searches from database:", allSearches);
 
-// Validate environment variables
-const convexUrl = process.env.CONVEX_URL;
-if (!convexUrl) {
-  console.error('❌ No CONVEX_URL found! Please set CONVEX_URL environment variable.');
-  process.exit(1);
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="text-center mb-12">
+        <h1 className="text-6xl font-bold text-blue-600 mb-6">Majic Breaches</h1>
+        <p className="text-2xl text-gray-700 mb-4">
+          Search Data Breaches & Add Bots to Your Servers
+        </p>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Search across data breaches for usernames, emails, passwords, and more. 
+          Use the web interface below or add our bot to Discord/Revolt servers.
+        </p>
+      </div>
+
+      {/* Main Breach Search Interface */}
+      <BreachSearch />
+
+      {/* Bot Statistics */}
+      <div className="bg-white rounded-xl shadow-lg p-8 mb-12">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Bot Statistics</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="text-center">
+            <div className="text-4xl font-bold text-blue-600 mb-2">
+              {botStats ? botStats.totalSearches.toLocaleString() : "0"}
+            </div>
+            <div className="text-gray-600">Total Searches</div>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-green-600 mb-2">
+              {botStats ? botStats.totalResults.toLocaleString() : "0"}
+            </div>
+            <div className="text-gray-600">Results Found</div>
+          </div>
+        </div>
+      </div>
+
+
+
+      {/* Bot Invites */}
+      <BotInvites />
+
+      {/* Features */}
+      <div className="bg-white rounded-xl shadow-lg p-8 mb-12">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Features</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">🔍</div>
+            <h3 className="font-semibold mb-2">Advanced Search</h3>
+            <p className="text-gray-600 text-sm">
+              Search by email, username, password, phone, IP, or any keyword
+            </p>
+          </div>
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">⚡</div>
+            <h3 className="font-semibold mb-2">Fast Results</h3>
+            <p className="text-gray-600 text-sm">
+              Get instant results from multiple breach databases
+            </p>
+          </div>
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">🔒</div>
+            <h3 className="font-semibold mb-2">Secure & Private</h3>
+            <p className="text-gray-600 text-sm">
+              All searches are ephemeral and not logged permanently
+            </p>
+          </div>
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">📊</div>
+            <h3 className="font-semibold mb-3">Detailed Results</h3>
+            <p className="text-gray-600 text-sm">
+              See breach names, dates, and matched data fields
+            </p>
+          </div>
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">🎯</div>
+            <h3 className="font-semibold mb-2">OSINT Ready</h3>
+            <p className="text-gray-600 text-sm">
+              Perfect for security research and investigations
+            </p>
+          </div>
+          <div className="text-center p-4">
+            <div className="text-3xl mb-3">🤖</div>
+            <h3 className="font-semibold mb-2">Easy Commands</h3>
+            <p className="text-gray-600 text-sm">
+              Simple slash commands and text commands
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Commands */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        {/* Discord Commands */}
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="flex items-center mb-6">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-white font-bold">D</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">Discord Commands</h2>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                /search &lt;query&gt; [limit]
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Search for breaches</p>
+            </div>
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                /stats
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Show bot statistics</p>
+            </div>
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                /help
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Show help message</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Revolt Commands */}
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="flex items-center mb-6">
+            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-white font-bold">R</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">Revolt Commands</h2>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                !breach search &lt;query&gt;
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Search for breaches</p>
+            </div>
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                !breach stats
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Show bot statistics</p>
+            </div>
+            <div>
+              <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
+                !breach help
+              </code>
+              <p className="text-gray-600 text-sm mt-1">Show help message</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+        <div className="text-2xl mb-2">⚠️</div>
+        <h3 className="font-semibold text-yellow-800 mb-2">Important Disclaimer</h3>
+        <p className="text-yellow-700 text-sm">
+          This bot is intended for educational and security research purposes only. 
+          Please use responsibly and in accordance with applicable laws and regulations.
+        </p>
+      </div>
+    </div>
+  );
 }
-
-console.log(`🔗 Connecting to Convex: ${convexUrl}`);
-const convex = new ConvexHttpClient(convexUrl);
-
-const client = new Client({
-  unreads: true,
-  autoReconnect: true,
-});
-
-client.on('ready', async () => {
-  console.log(`✅ Logged in as ${client.user?.username || 'Unknown'}!`);
-  console.log(`🤖 Bot ID: ${client.user?._id || 'Unknown'}`);
-  console.log(`🔗 Connected to ${client.servers?.size || 0} servers`);
-  
-  // List all servers and channels for debugging
-  if (client.servers) {
-    console.log('📋 Server details:');
-    for (const [serverId, server] of client.servers) {
-      console.log(`  Server: ${server.name} (ID: ${serverId})`);
-      if (server.channels) {
-        for (const [channelId, channel] of server.channels) {
-          console.log(`    Channel: ${channel.name} (ID: ${channelId})`);
-        }
-      }
-    }
-  }
-  
-  console.log('🎯 Ready to receive commands!');
-});
-
-// Try both message events
-client.on('message', async (message) => {
-  console.log('📨 "message" event triggered');
-  await handleMessage(message);
-});
-
-client.on('messageCreate', async (message) => {
-  console.log('📨 "messageCreate" event triggered');
-  await handleMessage(message);
-});
-
-async function handleMessage(message) {
-  // Enhanced logging for debugging
-  console.log(`📨 Message received:`);
-  console.log(`  Content: "${message.content || 'No content'}"`);
-  console.log(`  Author: ${message.author?.username || 'Unknown'}`);
-  console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
-  console.log(`  Is Bot: ${message.author?.bot || false}`);
-  
-  // Ignore messages from bots
-  if (message.author?.bot) {
-    console.log('🤖 Ignoring bot message');
-    return;
-  }
-  
-  // Temporary: respond to any message for testing
-  if (message.content === 'test') {
-    console.log('🧪 Test message detected, sending response...');
-    try {
-      await message.reply('✅ Bot is receiving messages!');
-      console.log('✅ Test response sent');
-    } catch (error) {
-      console.error('❌ Failed to send test response:', error);
-    }
-    return;
-  }
-  
-  // Only respond to messages that start with !breach
-  if (!message.content?.startsWith('!breach')) {
-    console.log('❌ Message does not start with !breach');
-    return;
-  }
-  
-  console.log('✅ Processing !breach command');
-  
-  const args = message.content.slice(7).trim().split(/ +/);
-  const command = args.shift()?.toLowerCase();
-  
-  try {
-    if (command === 'ping') {
-      console.log('🏓 Sending ping response...');
-      await message.reply('🏓 Pong! Bot is working!');
-      console.log('✅ Ping response sent successfully');
-      return;
-    } else if (command === 'search') {
-      if (args.length === 0) {
-        await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
-        return;
-      }
-      
-      const query = args.join(' ');
-      console.log(`Revolt search: ${query}`);
-      
-      // Use HTTP API instead of Convex client
-      const searchUrl = `${convexUrl}/search`;
-      console.log(`Making request to: ${searchUrl}`);
-      
-      const searchResponse = await fetch(searchUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query,
-          limit: 10,
-          platform: 'revolt'
-        }),
-      });
-
-      if (!searchResponse.ok) {
-        const errorText = await searchResponse.text();
-        console.error('Search API error:', errorText);
-        await message.reply(`❌ Search failed: ${errorText}`);
-        return;
-      }
-
-      const searchData = await searchResponse.json();
-      
-      if (!searchData.success || !searchData.results || searchData.results.length === 0) {
-        await message.reply(`🔍 No results found for: **${query}**`);
-        return;
-      }
-      
-      const preview = searchData.results.slice(0, 2);
-      let response = `🔍 **Breach Search Results**\n\nFound **${searchData.resultCount}** results for: **${query}**\n\n`;
-      
-      preview.forEach((breach, index) => {
-        // Truncate breach name if it's too long
-        const truncatedBreachName = breach.breachName.length > 200 
-          ? breach.breachName.substring(0, 200) + '...' 
-          : breach.breachName;
-        
-        response += `**${index + 1}. ${truncatedBreachName}**\n`;
-        if (breach.breachDate) {
-          response += `📅 Date: ${breach.breachDate}\n`;
-        }
-        response += `🎯 Matched Field: ${breach.matchedField}\n`;
-        response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
-        
-        // Show the actual breach content (email, password, etc.) with better formatting
-        if (breach.content) {
-          response += `\n**🔍 Breach Data:**\n`;
-          const contentLines = breach.content.split('\n').filter(line => line.trim());
-          // Limit to first 8 lines for Revolt (more generous than Discord)
-          const limitedLines = contentLines.slice(0, 8);
-          limitedLines.forEach(line => {
-            response += `\`${line}\`\n`;
-          });
-          if (contentLines.length > 8) {
-            response += `*... and ${contentLines.length - 8} more lines*\n`;
-          }
-        }
-        
-        if (breach.recordCount) {
-          response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
-        }
-        response += '\n';
-      });
-      
-      if (searchData.resultCount > 2) {
-        response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
-      }
-      
-      // Use the web app URL for results page, not Convex URL
-      const webAppUrl = process.env.WEB_APP_URL || process.env.CONVEX_SITE_URL || 'https://majic-breaches-bot.vercel.app';
-      response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
-      response += `⚠️ *Use responsibly for security research purposes only*`;
-      
-      await message.reply(response);
-      
-    } else if (command === 'stats') {
-      const statsUrl = `${convexUrl}/stats`;
-      const statsResponse = await fetch(statsUrl);
-      
-      if (!statsResponse.ok) {
-        await message.reply('❌ Failed to get statistics');
-        return;
-      }
-      
-      const stats = await statsResponse.json();
-      
-      const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
-      
-      await message.reply(response);
-      
-    } else if (command === 'help') {
-      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach ping\` - Test bot connection\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
-      
-      await message.reply(response);
-    } else {
-      await message.reply('❌ Unknown command. Use `!breach help` for available commands.');
-    }
-  } catch (error) {
-    console.error('Command error:', error);
-    try {
-      await message.reply('❌ An error occurred while processing your request.');
-    } catch (replyError) {
-      console.error('Failed to send error reply:', replyError);
-    }
-  }
-}
-
-// Enhanced error handling and logging
-client.on('error', (error) => {
-  console.error('Revolt client error:', error);
-});
-
-client.on('disconnect', () => {
-  console.log('Disconnected from Revolt');
-});
-
-// Add more debugging events
-client.on('packet', (packet) => {
-  if (packet.type === 'Message') {
-    console.log('📦 Raw message packet received:', JSON.stringify(packet, null, 2));
-  }
-});
-
-client.on('messageCreate', (message) => {
-  console.log('🆕 messageCreate event fired:', message.content);
-});
-
-client.on('messageUpdate', (message) => {
-  console.log('📝 messageUpdate event fired:', message.content);
-});
-
-// Log all events for debugging
-const originalEmit = client.emit;
-client.emit = function(event, ...args) {
-  if (event !== 'packet') { // Don't log packet events to avoid spam
-    console.log(`🎪 Event fired: ${event}`);
-  }
-  return originalEmit.call(this, event, ...args);
-};
-
-// Login with better error handling
-const token = process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN;
-if (!token || token === 'YOUR_ACTUAL_TOKEN_HERE') {
-  console.error('❌ No valid bot token found! Please set REVOLT_BOT_TOKEN environment variable.');
-  console.error('Current token value:', token ? 'Set but may be placeholder' : 'Not set');
-  process.exit(1);
-}
-
-console.log('🔄 Attempting to login to Revolt...');
-console.log('Token length:', token.length);
-console.log('Token starts with:', token.substring(0, 10) + '...');
-
-client.loginBot(token).then(() => {
-  console.log('✅ Login successful!');
-}).catch(error => {
-  console.error('❌ Failed to login to Revolt:', error);
-  console.error('Error details:', error.message);
-  process.exit(1);
-});
-
-/*
-PACKAGE.JSON CONTENT FOR REVOLT BOT:
-{
-  "name": "majic-breaches-revolt-bot",
-  "version": "1.0.0",
-  "description": "Revolt bot for Majic Breaches search",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
-  },
-  "dependencies": {
-    "revolt.js": "^7.2.0",
-    "convex": "^1.28.0",
-    "dotenv": "^16.6.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
-}
-*/
