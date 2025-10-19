@@ -32,24 +32,8 @@ require('dotenv').config();
 const { Client } = require('revolt.js');
 
 // Import fetch for Node.js compatibility
-let fetch;
-try {
-  // Try to use native fetch (Node 18+)
-  fetch = globalThis.fetch;
-  if (!fetch) {
-    throw new Error('No native fetch');
-  }
-  console.log('✅ Using native fetch');
-} catch (error) {
-  // Fallback to node-fetch for older Node versions
-  try {
-    fetch = require('node-fetch');
-    console.log('✅ Using node-fetch');
-  } catch (fetchError) {
-    console.error('❌ No fetch implementation available. Please install node-fetch or use Node 18+');
-    process.exit(1);
-  }
-}
+const fetch = require('node-fetch');
+console.log('✅ Using node-fetch for consistency');
 
 // Import keep-alive functionality
 try {
@@ -147,6 +131,16 @@ async function handleMessage(message) {
       await message.reply('🏓 Pong! Bot is working!');
       console.log('✅ Ping response sent successfully');
       return;
+    } else if (command === 'test') {
+      const testUrl = `${convexUrl}/api/test`;
+      const testResponse = await fetch(testUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: 'revolt' }),
+      });
+      const result = await testResponse.json();
+      await message.reply(`Test: ${JSON.stringify(result).substring(0, 100)}`);
+      return;
     } else if (command === 'search') {
       if (args.length === 0) {
         await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
@@ -162,16 +156,23 @@ async function handleMessage(message) {
       
       const requestBody = {
         query,
-        limit: 100, // Fixed: Changed from 10 to 100 to meet API minimum requirement
+        limit: 10, // Use same limit as Discord and web
         platform: 'revolt'
       };
       console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
       
       try {
+        console.log('🔍 Making fetch request with:');
+        console.log('  URL:', searchUrl);
+        console.log('  Method: POST');
+        console.log('  Headers:', { 'Content-Type': 'application/json' });
+        console.log('  Body:', JSON.stringify(requestBody));
+        
         const searchResponse = await fetch(searchUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'User-Agent': 'Majic-Breaches-Revolt-Bot/1.0',
           },
           body: JSON.stringify(requestBody),
         });
