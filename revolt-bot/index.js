@@ -16,9 +16,7 @@ if (!fs.existsSync(packageJsonPath)) {
     },
     "dependencies": {
       "revolt.js": "^7.2.0",
-      "convex": "^1.28.0",
-      "dotenv": "^16.6.1",
-      "node-fetch": "^3.3.2"
+      "dotenv": "^16.6.1"
     },
     "engines": {
       "node": ">=18.0.0"
@@ -31,9 +29,8 @@ if (!fs.existsSync(packageJsonPath)) {
 require('dotenv').config();
 const { Client } = require('revolt.js');
 
-// Import fetch for Node.js compatibility
-const fetch = require('node-fetch');
-console.log('✅ Using node-fetch for consistency');
+// Use Node.js built-in fetch (available in Node.js 18+)
+console.log('✅ Using Node.js built-in fetch');
 
 // Import keep-alive functionality
 try {
