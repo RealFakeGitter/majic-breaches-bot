@@ -133,27 +133,38 @@ async function handleMessage(message) {
       const query = args.join(' ');
       console.log(`Revolt search: ${query}`);
       
-      const searchResult = await convex.action('breaches:searchBreaches', {
-        query,
-        limit: 10,
-      });
+      // Use HTTP API instead of Convex client
+      const searchUrl = `${convexUrl}/search`;
+      console.log(`Making request to: ${searchUrl}`);
       
-      const result = await convex.query('breaches:getSearchResults', {
-        searchId: searchResult.searchId,
+      const searchResponse = await fetch(searchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          limit: 10,
+          platform: 'revolt'
+        }),
       });
-      
-      if (!result) {
-        await message.reply(`❌ Error: Search results not found`);
+
+      if (!searchResponse.ok) {
+        const errorText = await searchResponse.text();
+        console.error('Search API error:', errorText);
+        await message.reply(`❌ Search failed: ${errorText}`);
         return;
       }
+
+      const searchData = await searchResponse.json();
       
-      if (result.results.length === 0) {
+      if (!searchData.success || !searchData.results || searchData.results.length === 0) {
         await message.reply(`🔍 No results found for: **${query}**`);
         return;
       }
       
-      const preview = result.results.slice(0, 2); // Reduce to 2 results for better formatting
-      let response = `🔍 **Breach Search Results**\n\nFound **${result.results.length}** results for: **${query}**\n\n`;
+      const preview = searchData.results.slice(0, 2);
+      let response = `🔍 **Breach Search Results**\n\nFound **${searchData.resultCount}** results for: **${query}**\n\n`;
       
       preview.forEach((breach, index) => {
         // Truncate breach name if it's too long
@@ -188,18 +199,27 @@ async function handleMessage(message) {
         response += '\n';
       });
       
-      if (result.results.length > 2) {
-        response += `*... and ${result.results.length - 2} more results*\n\n`;
+      if (searchData.resultCount > 2) {
+        response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
       }
       
-      // Use the corrected URL format with query parameter
-      response += `🔗 **[View Full Results](${process.env.CONVEX_SITE_URL}/results?id=${searchResult.searchId})**\n\n`;
+      // Use the web app URL for results page, not Convex URL
+      const webAppUrl = process.env.WEB_APP_URL || process.env.CONVEX_SITE_URL || 'https://majic-breaches-bot.vercel.app';
+      response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
       response += `⚠️ *Use responsibly for security research purposes only*`;
       
       await message.reply(response);
       
     } else if (command === 'stats') {
-      const stats = await convex.query('bots:getBotStats');
+      const statsUrl = `${convexUrl}/stats`;
+      const statsResponse = await fetch(statsUrl);
+      
+      if (!statsResponse.ok) {
+        await message.reply('❌ Failed to get statistics');
+        return;
+      }
+      
+      const stats = await statsResponse.json();
       
       const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
       
