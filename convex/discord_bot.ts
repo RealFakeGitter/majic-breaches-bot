@@ -56,8 +56,7 @@ export const handleDiscordCommand = action({
           console.log("Calling searchBreaches action...");
           // Perform the search using the existing breach search function
           const searchResult = await ctx.runAction(api.breaches.searchBreaches, {
-            query,
-            limit
+            query
           });
           console.log("searchBreaches completed successfully:", searchResult);
 
@@ -66,7 +65,7 @@ export const handleDiscordCommand = action({
             searchId: searchResult.searchId
           });
 
-          if (!results || results.results.length === 0) {
+          if (!results || results.length === 0) {
             return {
               type: 4,
               data: {
@@ -77,7 +76,7 @@ export const handleDiscordCommand = action({
           }
 
           // Format results for Discord - consistent with embed version
-          const displayResults = results.results.slice(0, 2); // Match embed version
+          const displayResults = results.slice(0, 2); // Match embed version
           let response = `🔍 **Breach Search Results**\n\nFound **${searchResult.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
 
           for (const result of displayResults) {
@@ -91,8 +90,8 @@ export const handleDiscordCommand = action({
             
             if (result.content) {
               response += `\n**🔍 Breach Data:**\n`;
-              const lines = result.content.split('\n').filter(line => line.trim()).slice(0, 3);
-              lines.forEach(line => response += `\`${line}\`\n`);
+              const lines = result.content.split('\n').filter((line: string) => line.trim()).slice(0, 3);
+              lines.forEach((line: string) => response += `\`${line}\`\n`);
             }
             response += '\n';
           }
@@ -102,7 +101,7 @@ export const handleDiscordCommand = action({
           }
 
           // Add link to view all results on the web
-          const siteUrl = "https://insightful-mongoose-187.convex.app";
+          const siteUrl = "https://insightful-mongoose-187.convex.cloud";
           response += `🔗 **[View Full Results](${siteUrl}/results?id=${searchResult.searchId})**`;
 
           // Ensure we don't exceed Discord's 2000 character limit
