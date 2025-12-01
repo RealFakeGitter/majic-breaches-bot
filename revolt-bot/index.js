@@ -56,19 +56,27 @@ const client = new Client({
 client.on('ready', async () => {
   console.log(`✅ Logged in as ${client.user?.username || 'Unknown'}!`);
   console.log(`🤖 Bot ID: ${client.user?._id || 'Unknown'}`);
-  console.log(`🔗 Connected to ${client.servers?.size || 0} servers`);
   
-  // List all servers and channels for debugging
-  if (client.servers) {
+  // Fix: Check if servers exists and is iterable before trying to iterate
+  if (client.servers && typeof client.servers.size !== 'undefined') {
+    console.log(`🔗 Connected to ${client.servers.size || 0} servers`);
+    
+    // List all servers and channels for debugging
     console.log('📋 Server details:');
-    for (const [serverId, server] of client.servers) {
-      console.log(`  Server: ${server.name} (ID: ${serverId})`);
-      if (server.channels) {
-        for (const [channelId, channel] of server.channels) {
-          console.log(`    Channel: ${channel.name} (ID: ${channelId})`);
+    try {
+      for (const [serverId, server] of client.servers) {
+        console.log(`  Server: ${server.name} (ID: ${serverId})`);
+        if (server.channels && typeof server.channels[Symbol.iterator] === 'function') {
+          for (const [channelId, channel] of server.channels) {
+            console.log(`    Channel: ${channel.name} (ID: ${channelId})`);
+          }
         }
       }
+    } catch (iterError) {
+      console.log('⚠️ Could not iterate servers/channels:', iterError.message);
     }
+  } else {
+    console.log('🔗 Connected to 0 servers (or servers not loaded yet)');
   }
   
   console.log('🎯 Ready to receive commands!');
@@ -85,12 +93,20 @@ async function handleMessage(message) {
   console.log(`📨 Message received:`);
   console.log(`  Content: "${message.content || 'No content'}"`);
   console.log(`  Author: ${message.author?.username || 'Unknown'}`);
+  console.log(`  Author ID: ${message.author?._id || 'Unknown'}`);
+  console.log(`  Bot User ID: ${client.user?._id || 'Unknown'}`);
   console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
   console.log(`  Is Bot: ${message.author?.bot || false}`);
   
-  // Ignore messages from bots (including our own messages)
-  if (message.author?.bot || message.author?._id === client.user?._id) {
-    console.log('🤖 Ignoring bot message or own message');
+  // Fix: Only ignore if it's actually a bot OR if it's our own message
+  // The issue was that it was checking bot OR own message incorrectly
+  if (message.author?.bot) {
+    console.log('🤖 Ignoring bot message');
+    return;
+  }
+  
+  if (message.author?._id === client.user?._id) {
+    console.log('🤖 Ignoring own message');
     return;
   }
   
@@ -296,11 +312,6 @@ client.on('packet', (packet) => {
     console.log('📦 Raw message packet received:', JSON.stringify(packet, null, 2));
   }
 });
-
-// Remove the duplicate logging-only messageCreate handler
-// client.on('messageCreate', (message) => {
-//   console.log('🆕 messageCreate event fired (logging only):', message.content);
-// });
 
 client.on('messageUpdate', (message) => {
   console.log('📝 messageUpdate event fired:', message.content);
