@@ -98,17 +98,20 @@ async function handleMessage(message) {
   console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
   console.log(`  Is Bot: ${message.author?.bot || false}`);
   
-  // Fix: Only ignore if it's actually a bot OR if it's our own message
-  // The issue was that it was checking bot OR own message incorrectly
-  if (message.author?.bot) {
-    console.log('🤖 Ignoring bot message');
+  // Fix: Only ignore if it's actually a bot AND we can verify it
+  // Don't ignore messages if we can't determine the IDs properly
+  if (message.author?.bot === true) {
+    console.log('🤖 Ignoring confirmed bot message');
     return;
   }
   
-  if (message.author?._id === client.user?._id) {
-    console.log('🤖 Ignoring own message');
+  // Only ignore own messages if we can actually verify both IDs exist and match
+  if (message.author?._id && client.user?._id && message.author._id === client.user._id) {
+    console.log('🤖 Ignoring confirmed own message');
     return;
   }
+  
+  console.log('✅ Message passed bot/own message checks, proceeding...');
   
   // Temporary: respond to any message for testing
   if (message.content === 'test') {
