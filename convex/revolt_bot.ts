@@ -43,8 +43,7 @@ export const handleRevoltCommandNew = action({
 
           // Perform the search using the existing breach search function
           const searchResult = await ctx.runAction(api.breaches.searchBreaches, {
-            query,
-            limit: 100
+            query
           });
 
           // Get the results
@@ -52,7 +51,7 @@ export const handleRevoltCommandNew = action({
             searchId: searchResult.searchId
           });
 
-          if (!results || results.results.length === 0) {
+          if (!results || results.length === 0) {
             return {
               content: `🔍 **Search Results for "${query}"**\n\n❌ No results found.`
             };
@@ -66,8 +65,8 @@ export const handleRevoltCommandNew = action({
             fileContent += `Search Date: ${new Date().toISOString()}\n`;
             fileContent += `${"=".repeat(60)}\n\n`;
 
-            for (let i = 0; i < results.results.length; i++) {
-              const result = results.results[i];
+            for (let i = 0; i < results.length; i++) {
+              const result = results[i];
               fileContent += `Result #${i + 1}\n`;
               fileContent += `Breach: ${result.breachName}\n`;
               fileContent += `Matched Field: ${result.matchedField}\n`;
@@ -96,7 +95,7 @@ export const handleRevoltCommandNew = action({
             }
 
             // Format brief response message
-            const displayResults = results.results.slice(0, 3);
+            const displayResults = results.slice(0, 3);
             let response = `🔍 **Search Results for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"**\n`;
             response += `📊 Found ${searchResult.resultCount} total results (showing first ${displayResults.length})\n\n`;
 
@@ -124,7 +123,7 @@ export const handleRevoltCommandNew = action({
             }
           } else {
             // Format results for Revolt (3 or fewer results)
-            const displayResults = results.results;
+            const displayResults = results;
             let response = `🔍 **Search Results for "${query}"**\n\n`;
             response += `📊 Found ${searchResult.resultCount} total results\n\n`;
 
