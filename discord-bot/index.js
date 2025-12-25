@@ -1,378 +1,105 @@
-// Fixed Discord bot - better error handling and debugging
-const fs = require('fs');
-const path = require('path');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const axios = require('axios');
 
-const packageJsonPath = path.join(__dirname, 'package.json');
-if (!fs.existsSync(packageJsonPath)) {
-  const packageJson = {
-    "name": "majic-breaches-discord-bot",
-    "version": "1.0.0",
-    "description": "Discord bot for Majic Breaches search",
-    "main": "index.js",
-    "scripts": {
-      "start": "node index.js",
-      "dev": "node index.js",
-      "build": "echo 'No build step required'"
-    },
-    "dependencies": {
-      "discord.js": "^14.22.1",
-      "dotenv": "^16.6.1"
-    },
-    "engines": {
-      "node": ">=18.0.0"
+// --- Configuration ---
+const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const API_URL = 'https://majicbreaches.iceiy.com'; // Your new website URL
+const API_ENDPOINT = `${API_URL}/search.php`;
+
+// --- Initialize Client ---
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
+
+// --- Helper function to create a paginated embed ---
+function createPaginatedEmbed(data, query) {
+    if (!data.List || data.List['No results found']) {
+        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "${query}".`).setColor('#FF0000')] };
     }
-  };
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-  console.log('Generated package.json');
+
+    const embed = new EmbedBuilder()
+        .setTitle(`Majic Breaches Search Results`)
+        .setDescription(`Results for: \`${query}\`\nShowing first 10 entries. Click the button below to see all results.`)
+        .setColor('#00bfff');
+
+    let count = 0;
+    for (const dbName in data.List) {
+        if (dbName === 'No results found') continue;
+        if (count >= 10) break;
+
+        const breach = data.List[dbName];
+        let fieldValue = `**Info:** ${breach.InfoLeak.split('\n')[0]}\n`;
+
+        if (breach.Data && breach.Data.length > 0) {
+            // Display first 3 data points as an example
+            breach.Data.slice(0, 3).forEach(entry => {
+                for (const key in entry) {
+                    fieldValue += `\n**${key}:** \`${entry[key].substring(0, 100)}${entry[key].length > 100 ? '...' : ''}\``;
+                }
+                fieldValue += '\n---';
+            });
+        }
+        
+        embed.addFields({ name: `🔓 ${dbName}`, value: fieldValue.substring(0, 1020), inline: false });
+        count++;
+    }
+    
+    const fullResultsUrl = `${API_URL}?search=${encodeURIComponent(query)}`;
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setLabel('View Full Results')
+                .setStyle(ButtonStyle.Link)
+                .setURL(fullResultsUrl)
+        );
+
+    return { embeds: [embed], components: [row] };
 }
 
-require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionType } = require('discord.js');
 
-// Start health server for Render
-const http = require('http');
-const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ 
-    status: 'Discord bot running', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  }));
-});
-server.listen(PORT, () => {
-  console.log(`Health server running on port ${PORT}`);
+// --- Event Listeners ---
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
 });
 
-require('./keep-alive');
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+    if (!message.content.startsWith('!search')) return;
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-});
-
-// Fixed URL construction - API calls go to Convex HTTP actions, web interface goes to Convex site
-const CONVEX_API_URL = process.env.CONVEX_URL || 'https://insightful-mongoose-187.convex.site';
-const WEB_APP_URL = process.env.WEB_APP_URL || 'https://insightful-mongoose-187.convex.site';
-
-client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}!`);
-  console.log(`Convex API URL: ${CONVEX_API_URL}`);
-  console.log(`Web App URL: ${WEB_APP_URL}`);
-  console.log(`Search API URL: ${CONVEX_API_URL}/search`);
-  console.log(`Stats API URL: ${CONVEX_API_URL}/stats`);
-  
-  const commands = [
-    new SlashCommandBuilder()
-      .setName('search')
-      .setDescription('Search data breaches')
-      .addStringOption(option =>
-        option.setName('query')
-          .setDescription('Search term (email, username, etc.)')
-          .setRequired(true))
-      .addIntegerOption(option =>
-        option.setName('limit')
-          .setDescription('Maximum number of results (default: 100)')
-          .setRequired(false))
-      .addStringOption(option =>
-        option.setName('format')
-          .setDescription('Output format (preview, json, txt, html)')
-          .setRequired(false)
-          .addChoices(
-            { name: 'Preview (default)', value: 'preview' },
-            { name: 'JSON File', value: 'json' },
-            { name: 'Text File', value: 'txt' },
-            { name: 'HTML File', value: 'html' }
-          )),
-    
-    new SlashCommandBuilder()
-      .setName('stats')
-      .setDescription('Show bot statistics'),
-    
-    new SlashCommandBuilder()
-      .setName('help')
-      .setDescription('Show help information'),
-  ];
-
-  try {
-    console.log('Started refreshing application (/) commands.');
-    await client.application.commands.set(commands);
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error('Error registering commands:', error);
-  }
-});
-
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const { commandName } = interaction;
-
-  try {
-    if (commandName === 'search') {
-      const query = interaction.options.getString('query');
-      const limit = interaction.options.getInteger('limit') || 100;
-      const format = interaction.options.getString('format') || 'preview';
-      
-      console.log(`Discord search: ${query} (limit: ${limit}, format: ${format})`);
-      
-      // Immediately acknowledge the interaction to prevent timeout
-      try {
-        await interaction.deferReply({ ephemeral: true });
-        console.log('Successfully deferred reply');
-      } catch (deferError) {
-        console.error('Failed to defer reply:', deferError);
-        return;
-      }
-      
-      // Send immediate response with search in progress message
-      try {
-        await interaction.editReply({
-          content: `🔍 Searching for "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"...\n\n⏳ This may take a few seconds...`
-        });
-        console.log('Sent initial search message');
-      } catch (editError) {
-        console.error('Failed to send initial message:', editError);
-        return;
-      }
-      
-      // Perform the search
-      try {
-        const searchUrl = `${CONVEX_API_URL}/search`;
-        console.log(`Making request to: ${searchUrl}`);
-        console.log('Request body:', JSON.stringify({
-          query,
-          limit,
-          platform: 'discord'
-        }));
-        
-        const searchResponse = await fetch(searchUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query,
-            limit,
-            platform: 'discord'
-          }),
-          timeout: 30000, // 30 second timeout
-        });
-
-        console.log(`Response status: ${searchResponse.status}`);
-
-        if (!searchResponse.ok) {
-          const errorText = await searchResponse.text();
-          console.error('Search API error response:', errorText);
-          
-          let errorMessage = 'Unknown error';
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorMessage = errorJson.message || errorJson.error || errorText;
-          } catch (e) {
-            errorMessage = errorText;
-          }
-          
-          await interaction.editReply({
-            content: `❌ Search failed (${searchResponse.status}): ${errorMessage.substring(0, 200)}`,
-          });
-          return;
-        }
-
-        const searchData = await searchResponse.json();
-        console.log('Search API response received:', {
-          success: searchData.success,
-          resultCount: searchData.resultCount,
-          hasResults: !!searchData.results,
-          resultsLength: searchData.results?.length || 0
-        });
-        
-        if (!searchData.success || !searchData.results || searchData.results.length === 0) {
-          await interaction.editReply({
-            content: `🔍 **Search Results for "${query}"**\n\n❌ No results found.`,
-          });
-          return;
-        }
-        
-        // Handle different output formats
-        if (format === 'preview') {
-          // Create a simple text response instead of embed for faster processing
-          const preview = searchData.results.slice(0, 2);
-          let response = `🔍 **Search Results**\n\nFound **${searchData.resultCount}** results for: **${query.substring(0, 50)}${query.length > 50 ? "..." : ""}**\n\n`;
-          
-          preview.forEach((breach, index) => {
-            const truncatedBreachName = breach.breachName.length > 100 
-              ? breach.breachName.substring(0, 100) + '...' 
-              : breach.breachName;
-            
-            response += `**${index + 1}. ${truncatedBreachName}**\n`;
-            response += `🎯 Match: ${breach.matchedField}\n`;
-            response += `📋 Fields: ${breach.dataTypes.join(', ')}\n`;
-            
-            if (breach.content) {
-              const contentLines = breach.content.split('\n').filter(line => line.trim());
-              const limitedLines = contentLines.slice(0, 2);
-              limitedLines.forEach(line => {
-                response += `\`${line.substring(0, 80)}${line.length > 80 ? "..." : ""}\`\n`;
-              });
-            }
-            response += '\n';
-          });
-          
-          if (searchData.resultCount > 2) {
-            response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
-          }
-          
-          // Ensure we don't exceed Discord's 2000 character limit
-          if (response.length > 1800) {
-            response = response.substring(0, 1700) + '...\n\n*Use the button below to view all results*';
-          }
-          
-          // Create button for full results - use web app URL, not Convex API URL
-          const viewButton = new ButtonBuilder()
-            .setLabel('🔗 View Full Results')
-            .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/search-results?id=${searchData.searchId}`);
-          
-          const row = new ActionRowBuilder().addComponents(viewButton);
-          
-          await interaction.editReply({
-            content: response,
-            components: [row]
-          });
-        } else {
-          // File attachment
-          const fileContent = format === 'json' ? JSON.stringify(searchData, null, 2) : 
-            format === 'html' ? `<html><body><h1>Results: ${searchData.resultCount}</h1>${searchData.results.map((b, i) => `<div><h3>${i+1}. ${b.breachName}</h3><pre>${b.content}</pre></div>`).join('')}</body></html>` :
-            `Results: ${searchData.resultCount}\n\n${searchData.results.map((b, i) => `${i+1}. ${b.breachName}\n${b.content}`).join('\n\n---\n\n')}`;
-          const fileName = `breach-results-${Date.now()}.${format === 'json' ? 'json' : format === 'html' ? 'html' : 'txt'}`;
-          const attachment = new AttachmentBuilder(Buffer.from(fileContent, 'utf8'), { name: fileName });
-          
-          const viewButton = new ButtonBuilder()
-            .setLabel('🔗 View Online')
-            .setStyle(ButtonStyle.Link)
-            .setURL(`${WEB_APP_URL}/search-results?id=${searchData.searchId}`);
-          
-          const row = new ActionRowBuilder().addComponents(viewButton);
-          
-          await interaction.editReply({
-            content: `🔍 Found **${searchData.resultCount}** results\n\n📎 File: ${fileName}\n\n🔗 Use button to view online`,
-            files: [attachment],
-            components: [row]
-          });
-        }
-        
-      } catch (searchError) {
-        console.error('Search error details:', searchError);
-        console.error('Search error stack:', searchError.stack);
-        try {
-          await interaction.editReply({
-            content: `❌ Search failed: ${searchError.message.substring(0, 100)}`,
-          });
-        } catch (editError) {
-          console.error('Failed to edit reply with error:', editError);
-        }
-      }
-      
-    } else if (commandName === 'stats') {
-      // Immediately acknowledge the interaction
-      try {
-        await interaction.deferReply({ ephemeral: true });
-        console.log('Successfully deferred stats reply');
-      } catch (deferError) {
-        console.error('Failed to defer stats reply:', deferError);
-        return;
-      }
-      
-      try {
-        const statsUrl = `${CONVEX_API_URL}/stats`;
-        console.log(`Making stats request to: ${statsUrl}`);
-        
-        const statsResponse = await fetch(statsUrl, {
-          timeout: 10000 // 10 second timeout for stats
-        });
-        console.log(`Stats response status: ${statsResponse.status}`);
-        
-        if (!statsResponse.ok) {
-          const errorText = await statsResponse.text();
-          console.error('Stats API error:', errorText);
-          throw new Error(`Stats API returned ${statsResponse.status}: ${errorText}`);
-        }
-        
-        const stats = await statsResponse.json();
-        console.log('Stats received:', stats);
-        
-        const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: ${stats.totalSearches.toLocaleString()}\n📋 Total Results: ${stats.totalResults.toLocaleString()}`;
-        
-        await interaction.editReply({
-          content: response
-        });
-      } catch (statsError) {
-        console.error('Stats error:', statsError);
-        await interaction.editReply({
-          content: `❌ Failed to get statistics: ${statsError.message}`,
-        });
-      }
-      
-    } else if (commandName === 'help') {
-      // Help command can respond immediately since it's static
-      const helpText = `🤖 **Majic Breaches Bot Help**
-
-**Commands:**
-\`/search <query> [limit] [format]\` - Search breaches
-\`/stats\` - Show statistics
-\`/help\` - Show this help
-
-**Format Options:**
-• \`preview\` - Show preview in Discord (default)
-• \`json\` - Download results as JSON file
-• \`txt\` - Download results as text file
-• \`html\` - Download results as HTML file
-
-**Examples:**
-\`/search john@example.com\`
-\`/search username123 500 json\`
-\`/search password123 100 txt\`
-
-⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
-
-      await interaction.reply({ 
-        content: helpText, 
-        ephemeral: true 
-      });
+    const query = message.content.substring(7).trim();
+    if (!query) {
+        return message.reply('Please provide a search term. Example: `!search email@example.com`');
     }
-  } catch (error) {
-    console.error('Command error:', error);
-    console.error('Command error stack:', error.stack);
-    
-    // Try to respond if we haven't already
+
     try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ 
-          content: '❌ An error occurred while processing your request.', 
-          ephemeral: true 
+        // This is a temporary message to let the user know we're working
+        const loadingMessage = await message.reply({ content: 'Searching... please wait.' });
+
+        // Make the request to your own API endpoint
+        const response = await axios.post(API_ENDPOINT, { query: query }, {
+            headers: { 'Content-Type': 'application/json' }
         });
-      } else if (interaction.deferred && !interaction.replied) {
-        await interaction.editReply({ 
-          content: '❌ An error occurred while processing your request.' 
-        });
-      }
-    } catch (replyError) {
-      console.error('Failed to send error response:', replyError);
-      // Don't try to respond again if we get another error
+
+        const data = response.data;
+
+        // Delete the "Searching..." message
+        await loadingMessage.delete();
+
+        // Send the formatted results
+        await message.channel.send(createPaginatedEmbed(data, query));
+
+    } catch (error) {
+        console.error('Search Error:', error.response ? error.response.data : error.message);
+        const errorMessage = error.response && error.response.data && error.response.data.error 
+            ? `API Error: ${error.response.data.error}` 
+            : 'An unknown error occurred while searching.';
+        message.reply(errorMessage);
     }
-  }
 });
 
-client.on('error', error => {
-  console.error('Discord client error:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-client.login(process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN);
+// --- Login ---
+client.login(BOT_TOKEN);
