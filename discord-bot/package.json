@@ -9,7 +9,7 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "axios": "^1^.6.0",
+    "axios": "^1.6.0",
     "discord.js": "^2^.22.1",
     "convex": "^1^.28.0",
     "dotenv": "^3^.6.1"
