@@ -1,16 +1,10 @@
 services:
   - type: web
-    name: majic-breaches-discord-bot
+    name: majic-breaches-bot
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DISCORD_BOT_TOKEN
-        sync: false
-      - key: DISCORD_CLIENT_ID
-        sync: false
-      - key: CONVEX_URL
-        sync: false
+    buildCommand: "cd ./discord-bot && npm install"
+    startCommand: "cd ./discord-bot && npm start"
+    repo: https://github.com/RealFakeGitter/majic-breaches-bot.git
+    rootDir: ./discord-bot
+    autoDeploy: false
