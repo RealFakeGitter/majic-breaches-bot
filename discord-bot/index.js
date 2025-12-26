@@ -67,7 +67,7 @@ client.once('ready', () => {
 });
 
 client.on('messageCreate', async message => {
-    console.log(`Message received from ${message.author.tag}: ${message.content}`); // THIS IS THE NEW DEBUG LINE
+    console.log(`Message received from ${message.author.tag}: ${message.content}`);
     if (message.author.bot) return;
     if (!message.content.startsWith('!search')) return;
 
@@ -82,6 +82,7 @@ client.on('messageCreate', async message => {
         const response = await axios.post(API_ENDPOINT, { query: query });
         const data = response.data;
         console.log('Successfully received data from API.');
+        console.log('Raw API Response:', JSON.stringify(data, null, 2)); // THIS IS THE NEW DEBUG LINE
         await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
