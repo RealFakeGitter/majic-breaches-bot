@@ -42,7 +42,7 @@ function createPaginatedEmbed(data, query) {
             });
         }
         
-        embed.addFields({ name: `🔓 ${dbName}`, value: fieldValue.substring(0, 1020), inline: false });
+        embed.addFields({ name: `🔓 ${dbName}`, value: fieldValue.substring(0, 1024), inline: false });
         count++;
     }
     
@@ -79,7 +79,6 @@ client.on('messageCreate', async message => {
     try {
         const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
         
-        // --- THE FIX ---
         // Add headers to make the request look like it's coming from your website.
         const response = await axios.get(apiUrl, {
             headers: {
@@ -87,10 +86,15 @@ client.on('messageCreate', async message => {
                 'Origin': 'https://majicbreaches.iceiy.com'
             }
         });
-        // --- END OF FIX ---
 
         const data = response.data;
-        console.log('Successfully received data from API.');
+        
+        // --- DEBUGGING LOGS ---
+        console.log('--- RAW API RESPONSE ---');
+        console.log(JSON.stringify(data, null, 2)); // Pretty-print the JSON response
+        console.log('--- END RAW RESPONSE ---');
+        // --- END DEBUGGING LOGS ---
+
         await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
