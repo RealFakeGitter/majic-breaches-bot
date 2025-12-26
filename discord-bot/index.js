@@ -78,13 +78,10 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        const response = await axios.post(API_ENDPOINT, { query: query }, {
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = response.data;
-        console.log('Successfully received data from API.');
-        await message.channel.send(createPaginatedEmbed(data, query));
+    const response = await axios.post(API_ENDPOINT, { query: query });
+    const data = response.data;
+    console.log('Successfully received data from API.');
+    await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
         console.error('!!! SEARCH ERROR !!!'); // Added this for clarity
