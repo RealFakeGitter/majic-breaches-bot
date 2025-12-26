@@ -77,10 +77,18 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        // CORRECT API ENDPOINT - NO /api-v2
         const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
         
-        const response = await axios.get(apiUrl);
+        // --- THE FIX ---
+        // Add headers to make the request look like it's coming from your website.
+        const response = await axios.get(apiUrl, {
+            headers: {
+                'Referer': 'https://majicbreaches.iceiy.com/',
+                'Origin': 'https://majicbreaches.iceiy.com'
+            }
+        });
+        // --- END OF FIX ---
+
         const data = response.data;
         console.log('Successfully received data from API.');
         await message.channel.send(createPaginatedEmbed(data, query));
