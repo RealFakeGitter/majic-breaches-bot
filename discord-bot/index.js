@@ -2,8 +2,10 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const axios = require('axios');
 
 // --- Configuration ---
+// The bot will now PREFER the URL from the environment variable,
+// but will fall back to the hardcoded one if it's not set.
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const API_URL = 'https://majicbreaches.iceiy.com'; // Your new website URL
+const API_URL = process.env.API_URL || 'https://majicbreaches.iceiy.com'; // Fallback URL
 const API_ENDPOINT = `${API_URL}/search.php`;
 
 // --- Initialize Client ---
@@ -64,6 +66,7 @@ function createPaginatedEmbed(data, query) {
 // --- Event Listeners ---
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Making requests to API at: ${API_ENDPOINT}`); // This will log the correct URL
 });
 
 client.on('messageCreate', async message => {
