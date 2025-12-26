@@ -3,7 +3,8 @@ const axios = require('axios');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
+// The API key is no longer needed here since the website handles it.
+// const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
 
 // --- Initialize Client ---
 const client = new Client({
@@ -77,21 +78,27 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
+        // --- THE FIX ---
+        // Call your own website's backend script instead of the API directly.
+        const apiUrl = 'https://majicbreaches.iceiy.com/search.php';
         
-        // Add headers to make the request look like it's coming from your website.
-        const response = await axios.get(apiUrl, {
+        // The browser sends a POST request with the query in the body. We'll do the same.
+        const response = await axios.post(apiUrl, {
+            query: query
+        }, {
             headers: {
+                'Content-Type': 'application/json',
                 'Referer': 'https://majicbreaches.iceiy.com/',
                 'Origin': 'https://majicbreaches.iceiy.com'
             }
         });
+        // --- END OF FIX ---
 
         const data = response.data;
         
         // --- DEBUGGING LOGS ---
         console.log('--- RAW API RESPONSE ---');
-        console.log(JSON.stringify(data, null, 2)); // Pretty-print the JSON response
+        console.log(JSON.stringify(data, null, 2));
         console.log('--- END RAW RESPONSE ---');
         // --- END DEBUGGING LOGS ---
 
