@@ -3,8 +3,9 @@ const axios = require('axios');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+// --- POINT TO THE NEW SIMPLE API ---
 const API_URL = process.env.API_URL || 'https://majicbreaches.iceiy.com';
-const API_ENDPOINT = `${API_URL}/search.php`;
+const API_ENDPOINT = `${API_URL}/simple-api.php`; // Changed to simple-api.php
 
 // --- Initialize Client ---
 const client = new Client({
@@ -67,8 +68,7 @@ client.once('ready', () => {
 });
 
 client.on('messageCreate', async message => {
-    console.log(`Message received from ${message.author.tag}: ${message.content}`);
-    if (message.author.bot) return;
+    if (message.author.bot && message.author.id !== client.user.id) return;
     if (!message.content.startsWith('!search')) return;
 
     const query = message.content.substring(7).trim();
@@ -79,9 +79,7 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        const response = await axios.post(API_ENDPOINT, { query: query }, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
+        const response = await axios.post(API_ENDPOINT, { query: query });
         const data = response.data;
         console.log('Successfully received data from API.');
         await message.channel.send(createPaginatedEmbed(data, query));
@@ -100,7 +98,7 @@ client.on('messageCreate', async message => {
             errorMessage = 'Could not connect to the search API. The server may be down.';
         } else {
             console.error('Error Message:', error.message);
-            errorMessage = `Request setup request error: ${error.message}`;
+            errorMessage = `Request setup error: ${error.message}`;
         }
         
         try {
