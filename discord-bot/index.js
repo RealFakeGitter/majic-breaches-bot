@@ -77,8 +77,8 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        // Call the Leakosint API DIRECTLY. No proxy needed.
-        const apiUrl = `https://leakosint.com/api/api-v2?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
+        // CORRECT API ENDPOINT - NO /api-v2
+        const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
         
         const response = await axios.get(apiUrl);
         const data = response.data;
