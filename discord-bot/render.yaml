@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: worker
     name: majic-breaches-bot
     env: node
     plan: free
