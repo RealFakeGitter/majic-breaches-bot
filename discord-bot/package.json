@@ -4,7 +4,7 @@
   "description": "Discord bot for Majic Breaches search",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+   "start": "pkill -f 'node index.js' && sleep 2 && node index.js",
     "dev": "node index.js",
     "build": "echo 'No build step required'"
   },
