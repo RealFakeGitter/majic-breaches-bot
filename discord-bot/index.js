@@ -2,10 +2,8 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const axios = require('axios');
 
 // --- Configuration ---
-// The bot will now PREFER the URL from the environment variable,
-// but will fall back to the hardcoded one if it's not set.
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const API_URL = process.env.API_URL || 'https://majicbreaches.iceiy.com'; // Fallback URL
+const API_URL = process.env.API_URL || 'https://majicbreaches.iceiy.com';
 const API_ENDPOINT = `${API_URL}/search.php`;
 
 // --- Initialize Client ---
@@ -37,7 +35,6 @@ function createPaginatedEmbed(data, query) {
         let fieldValue = `**Info:** ${breach.InfoLeak.split('\n')[0]}\n`;
 
         if (breach.Data && breach.Data.length > 0) {
-            // Display first 3 data points as an example
             breach.Data.slice(0, 3).forEach(entry => {
                 for (const key in entry) {
                     fieldValue += `\n**${key}:** \`${entry[key].substring(0, 100)}${entry[key].length > 100 ? '...' : ''}\``;
@@ -66,7 +63,7 @@ function createPaginatedEmbed(data, query) {
 // --- Event Listeners ---
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
-    console.log(`Making requests to API at: ${API_ENDPOINT}`); // This will log the correct URL
+    console.log(`Making requests to API at: ${API_ENDPOINT}`);
 });
 
 client.on('messageCreate', async message => {
@@ -78,29 +75,46 @@ client.on('messageCreate', async message => {
         return message.reply('Please provide a search term. Example: `!search email@example.com`');
     }
 
-    try {
-        // This is a temporary message to let the user know we're working
-        const loadingMessage = await message.reply({ content: 'Searching... please wait.' });
+    console.log(`Received search command for query: "${query}"`);
 
-        // Make the request to your own API endpoint
+    try {
         const response = await axios.post(API_ENDPOINT, { query: query }, {
             headers: { 'Content-Type': 'application/json' }
         });
 
         const data = response.data;
-
-        // Delete the "Searching..." message
-        await loadingMessage.delete();
-
-        // Send the formatted results
+        console.log('Successfully received data from API.');
         await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
-        console.error('Search Error:', error.response ? error.response.data : error.message);
-        const errorMessage = error.response && error.response.data && error.response.data.error 
-            ? `API Error: ${error.response.data.error}` 
-            : 'An unknown error occurred while searching.';
-        message.reply(errorMessage);
+        console.error('!!! SEARCH ERROR !!!'); // Added this for clarity
+        console.error('Error Details:', error); // This will log the full error object
+
+        // Let's try to give a more specific error message
+        let errorMessage = 'An unknown error occurred while searching.';
+        if (error.response) {
+            // The request was made and the server responded with a status code
+            // that falls out of the range of 2xx
+            console.error('API Response Status:', error.response.status);
+            console.error('API Response Data:', error.response.data);
+            errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
+        } else if (error.request) {
+            // The request was made but no response was received
+            // `error.request` is an instance of XMLHttpRequest in the browser and an instance of http.ClientRequest in node.js
+            console.error('No response received from API. The server might be down.');
+            errorMessage = 'Could not connect to the search API. The server may be down.';
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            console.error('Error Message:', error.message);
+            errorMessage = `Request setup error: ${error.message}`;
+        }
+        
+        // Send the error to Discord
+        try {
+            await message.reply(errorMessage);
+        } catch(replyError) {
+            console.error('Failed to send error message to Discord:', replyError);
+        }
     }
 });
 
