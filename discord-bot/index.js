@@ -79,10 +79,11 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        const response = await axios.post(API_ENDPOINT, { query: query });
+        const response = await axios.post(API_ENDPOINT, { query: query }, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+        });
         const data = response.data;
         console.log('Successfully received data from API.');
-        console.log('Raw API Response:', JSON.stringify(data, null, 2)); // THIS IS THE NEW DEBUG LINE
         await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
@@ -99,7 +100,7 @@ client.on('messageCreate', async message => {
             errorMessage = 'Could not connect to the search API. The server may be down.';
         } else {
             console.error('Error Message:', error.message);
-            errorMessage = `Request setup error: ${error.message}`;
+            errorMessage = `Request setup request error: ${error.message}`;
         }
         
         try {
