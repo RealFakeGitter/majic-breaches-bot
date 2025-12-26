@@ -1,6 +1,6 @@
 services:
   - type: worker
-    name: majic-breaches-bot
+    name: majic-breaches-bot-v2
     env: node
     plan: free
     buildCommand: "cd ./discord-bot && npm install --cache /tmp/empty-cache"
