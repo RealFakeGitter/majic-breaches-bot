@@ -3,8 +3,7 @@ const axios = require('axios');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-// The API key is no longer needed here since the website handles it.
-// const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
+const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
 
 // --- Initialize Client ---
 const client = new Client({
@@ -18,7 +17,7 @@ const client = new Client({
 // --- Helper function to create a paginated embed ---
 function createPaginatedEmbed(data, query) {
     if (!data.List || data.List['No results found']) {
-        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "${query}".`).setColor('#FF0000')] };
+        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "\${query}".`).setColor('#FF0000')] };
     }
 
     const embed = new EmbedBuilder()
@@ -62,7 +61,7 @@ function createPaginatedEmbed(data, query) {
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as \${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
@@ -78,18 +77,25 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        // --- THE FIX ---
-        // Call your own website's backend script instead of the API directly.
-        const apiUrl = 'https://majicbreaches.iceiy.com/search.php';
+        // --- THE FINAL, CORRECT FIX ---
+        // Call the Leakosint API directly, but use the exact headers your browser uses.
+        const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
         
-        // The browser sends a POST request with the query in the body. We'll do the same.
-        const response = await axios.post(apiUrl, {
-            query: query
-        }, {
+        const response = await axios.get(apiUrl, {
             headers: {
-                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Accept-Encoding': 'gzip, deflate, br, zstd',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive',
+                'Origin': 'https://majicbreaches.iceiy.com',
                 'Referer': 'https://majicbreaches.iceiy.com/',
-                'Origin': 'https://majicbreaches.iceiy.com'
+                'Sec-Ch-Ua': '"Chromium";v="143", "Not A(Brand";v="24"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Linux"',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site',
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
             }
         });
         // --- END OF FIX ---
@@ -112,22 +118,6 @@ client.on('messageCreate', async message => {
         if (error.response) {
             console.error('API Response Status:', error.response.status);
             console.error('API Response Data:', error.response.data);
-            errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
+            errorMessage = `API Error: ${error.response.status} - \${error.response.data.error || 'Unknown API Error'}`;
         } else if (error.request) {
             console.error('No response received from API. The server might be down.');
-            errorMessage = 'Could not connect to the search API. The server may be down.';
-        } else {
-            console.error('Error Message:', error.message);
-            errorMessage = `Request setup error: ${error.message}`;
-        }
-        
-        try {
-            await message.reply(errorMessage);
-        } catch(replyError) {
-            console.error('Failed to send error message to Discord:', replyError);
-        }
-    }
-});
-
-// --- Login ---
-client.login(BOT_TOKEN);
