@@ -3,7 +3,7 @@ const axios = require('axios');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY; // API key is now an environment variable
+const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
 
 // --- Initialize Client ---
 const client = new Client({
@@ -46,7 +46,6 @@ function createPaginatedEmbed(data, query) {
         count++;
     }
     
-    // Note: The link is now to the Leakosint site directly since we don't have a public search page
     const fullResultsUrl = `https://leakosint.com/search?search=${encodeURIComponent(query)}`;
     const row = new ActionRowBuilder()
         .addComponents(
@@ -78,13 +77,10 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-        // We are now calling a public proxy to bypass CORS issues
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-        const leakosintUrl = `https://leakosint.com/api/api-v2?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
-        const finalUrl = proxyUrl + leakosintUrl;
-
-        // Use a GET request because we are just fetching a URL through the proxy
-        const response = await axios.get(finalUrl);
+        // Call the Leakosint API DIRECTLY. No proxy needed.
+        const apiUrl = `https://leakosint.com/api/api-v2?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
+        
+        const response = await axios.get(apiUrl);
         const data = response.data;
         console.log('Successfully received data from API.');
         await message.channel.send(createPaginatedEmbed(data, query));
@@ -99,8 +95,8 @@ client.on('messageCreate', async message => {
             console.error('API Response Data:', error.response.data);
             errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
         } else if (error.request) {
-            console.error('No response received from API. The server might be down or the proxy is blocked.');
-            errorMessage = 'Could not connect to the search API. The proxy server may be down.';
+            console.error('No response received from API. The server might be down.');
+            errorMessage = 'Could not connect to the search API. The server may be down.';
         } else {
             console.error('Error Message:', error.message);
             errorMessage = `Request setup error: ${error.message}`;
