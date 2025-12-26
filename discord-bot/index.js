@@ -67,6 +67,7 @@ client.once('ready', () => {
 });
 
 client.on('messageCreate', async message => {
+    console.log(`Message received from ${message.author.tag}: ${message.content}`); // THIS IS THE NEW DEBUG LINE
     if (message.author.bot) return;
     if (!message.content.startsWith('!search')) return;
 
@@ -78,35 +79,28 @@ client.on('messageCreate', async message => {
     console.log(`Received search command for query: "${query}"`);
 
     try {
-    const response = await axios.post(API_ENDPOINT, { query: query });
-    const data = response.data;
-    console.log('Successfully received data from API.');
-    await message.channel.send(createPaginatedEmbed(data, query));
+        const response = await axios.post(API_ENDPOINT, { query: query });
+        const data = response.data;
+        console.log('Successfully received data from API.');
+        await message.channel.send(createPaginatedEmbed(data, query));
 
     } catch (error) {
-        console.error('!!! SEARCH ERROR !!!'); // Added this for clarity
-        console.error('Error Details:', error); // This will log the full error object
+        console.error('!!! SEARCH ERROR !!!');
+        console.error('Error Details:', error);
 
-        // Let's try to give a more specific error message
         let errorMessage = 'An unknown error occurred while searching.';
         if (error.response) {
-            // The request was made and the server responded with a status code
-            // that falls out of the range of 2xx
             console.error('API Response Status:', error.response.status);
             console.error('API Response Data:', error.response.data);
             errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
         } else if (error.request) {
-            // The request was made but no response was received
-            // `error.request` is an instance of XMLHttpRequest in the browser and an instance of http.ClientRequest in node.js
             console.error('No response received from API. The server might be down.');
             errorMessage = 'Could not connect to the search API. The server may be down.';
         } else {
-            // Something happened in setting up the request that triggered an Error
             console.error('Error Message:', error.message);
             errorMessage = `Request setup error: ${error.message}`;
         }
         
-        // Send the error to Discord
         try {
             await message.reply(errorMessage);
         } catch(replyError) {
