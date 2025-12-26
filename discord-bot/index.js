@@ -17,7 +17,7 @@ const client = new Client({
 // --- Helper function to create a paginated embed ---
 function createPaginatedEmbed(data, query) {
     if (!data.List || data.List['No results found']) {
-        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "\${query}".`).setColor('#FF0000')] };
+        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "${query}".`).setColor('#FF0000')] };
     }
 
     const embed = new EmbedBuilder()
@@ -61,7 +61,7 @@ function createPaginatedEmbed(data, query) {
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as \${client.user.tag}!`);
+    console.log(`Logged in as ${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
@@ -118,6 +118,22 @@ client.on('messageCreate', async message => {
         if (error.response) {
             console.error('API Response Status:', error.response.status);
             console.error('API Response Data:', error.response.data);
-            errorMessage = `API Error: ${error.response.status} - \${error.response.data.error || 'Unknown API Error'}`;
+            errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
         } else if (error.request) {
             console.error('No response received from API. The server might be down.');
+            errorMessage = 'Could not connect to the search API. The server may be down.';
+        } else {
+            console.error('Error Message:', error.message);
+            errorMessage = `Request setup error: ${error.message}`;
+        }
+        
+        try {
+            await message.reply(errorMessage);
+        } catch(replyError) {
+            console.error('Failed to send error message to Discord:', replyError);
+        }
+    }
+});
+
+// --- Login ---
+client.login(BOT_TOKEN);
