@@ -3,8 +3,8 @@ services:
     name: majic-breaches-bot-v2
     env: node
     plan: free
-    buildCommand: "cd ./discord-bot && npm install --cache /tmp/empty-cache"
-    startCommand: "cd ./discord-bot && npm start"
+    buildCommand: "npm install"
+    startCommand: "npm start"
     repo: https://github.com/RealFakeGitter/majic-breaches-bot.git
     rootDir: ./discord-bot
     autoDeploy: false
