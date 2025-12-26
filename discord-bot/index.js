@@ -1,9 +1,9 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const axios = require('axios');
+const puppeteer = require('puppeteer');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const LEAKOSINT_API_KEY = process.env.LEAKOSINT_API_KEY;
+const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
 // --- Initialize Client ---
 const client = new Client({
@@ -13,51 +13,6 @@ const client = new Client({
         GatewayIntentBits.MessageContent
     ]
 });
-
-// --- Helper function to create a paginated embed ---
-function createPaginatedEmbed(data, query) {
-    if (!data.List || data.List['No results found']) {
-        return { embeds: [new EmbedBuilder().setTitle('No Results').setDescription(`No results found for "${query}".`).setColor('#FF0000')] };
-    }
-
-    const embed = new EmbedBuilder()
-        .setTitle(`Majic Breaches Search Results`)
-        .setDescription(`Results for: \`${query}\`\nShowing first 10 entries. Click the button below to see all results.`)
-        .setColor('#00bfff');
-
-    let count = 0;
-    for (const dbName in data.List) {
-        if (dbName === 'No results found') continue;
-        if (count >= 10) break;
-
-        const breach = data.List[dbName];
-        let fieldValue = `**Info:** ${breach.InfoLeak.split('\n')[0]}\n`;
-
-        if (breach.Data && breach.Data.length > 0) {
-            breach.Data.slice(0, 3).forEach(entry => {
-                for (const key in entry) {
-                    fieldValue += `\n**${key}:** \`${entry[key].substring(0, 100)}${entry[key].length > 100 ? '...' : ''}\``;
-                }
-                fieldValue += '\n---';
-            });
-        }
-        
-        embed.addFields({ name: `🔓 ${dbName}`, value: fieldValue.substring(0, 1024), inline: false });
-        count++;
-    }
-    
-    const fullResultsUrl = `https://leakosint.com/search?search=${encodeURIComponent(query)}`;
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setLabel('View Full Results on Leakosint')
-                .setStyle(ButtonStyle.Link)
-                .setURL(fullResultsUrl)
-        );
-
-    return { embeds: [embed], components: [row] };
-}
-
 
 // --- Event Listeners ---
 client.once('ready', () => {
@@ -74,63 +29,93 @@ client.on('messageCreate', async message => {
         return message.reply('Please provide a search term. Example: `!search email@example.com`');
     }
 
+    // Let the user know the bot is working
+    await message.reply(`Searching for \`${query}\`... This may take a moment.`);
+
     console.log(`Received search command for query: "${query}"`);
 
+    let browser;
     try {
-        // --- THE FINAL, CORRECT FIX ---
-        // Call the Leakosint API directly, but use the exact headers your browser uses.
-        const apiUrl = `https://leakosint.com/api?query=${encodeURIComponent(query)}&key=${LEAKOSINT_API_KEY}`;
-        
-        const response = await axios.get(apiUrl, {
-            headers: {
-                'Accept': '*/*',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Connection': 'keep-alive',
-                'Origin': 'https://majicbreaches.iceiy.com',
-                'Referer': 'https://majicbreaches.iceiy.com/',
-                'Sec-Ch-Ua': '"Chromium";v="143", "Not A(Brand";v="24"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Linux"',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'cross-site',
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
-            }
+        // --- Launch Puppeteer Browser ---
+        browser = await puppeteer.launch({
+            headless: true, // Run in the background
+            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Required for running on Render
         });
-        // --- END OF FIX ---
 
-        const data = response.data;
+        const page = await browser.newPage();
+        await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
+
+        console.log('Navigated to website, waiting for search input...');
+
+        // --- Perform the Search ---
+        // Wait for the search input field to be available
+        await page.waitForSelector('#searchInput', { timeout: 10000 });
         
-        // --- DEBUGGING LOGS ---
-        console.log('--- RAW API RESPONSE ---');
-        console.log(JSON.stringify(data, null, 2));
-        console.log('--- END RAW RESPONSE ---');
-        // --- END DEBUGGING LOGS ---
+        // Type the query and press Enter
+        await page.type('#searchInput', query);
+        await page.keyboard.press('Enter');
 
-        await message.channel.send(createPaginatedEmbed(data, query));
+        console.log('Search submitted, waiting for results...');
+
+        // Wait for the results container to appear
+        await page.waitForSelector('#resultContainer', { timeout: 15000 });
+
+        // --- Scrape the Results ---
+        // Get the raw HTML of the results container
+        const resultsHtml = await page.$eval('#resultContainer', el => el.innerHTML);
+
+        console.log('Results found. Parsing HTML...');
+
+        // --- Format and Send the Response ---
+        const embed = new EmbedBuilder()
+            .setTitle(`Majic Breaches Search Results`)
+            .setDescription(`Results for: \`${query}\``)
+            .setColor('#00bfff');
+
+        // This is a simple HTML parser. It looks for <b> tags (database names)
+        // and the text immediately following them (the info).
+        const results = resultsHtml.split('<br>');
+        let resultCount = 0;
+        for (const result of results) {
+            if (resultCount >= 10) break; // Limit to 10 results
+
+            const dbNameMatch = result.match(/<b>(.*?)<\/b>/);
+            const infoMatch = result.match(/<\/b>\s*(.*?)(?:<br>|$)/);
+
+            if (dbNameMatch && infoMatch) {
+                const dbName = dbNameMatch[1];
+                const info = infoMatch[1].trim();
+                
+                // Clean up common HTML entities
+                const cleanInfo = info.replace(/&lt;/g, '<').replace(/&gt;/g, '>').substring(0, 1024);
+
+                embed.addFields({ name: `🔓 ${dbName}`, value: cleanInfo, inline: false });
+                resultCount++;
+            }
+        }
+
+        if (resultCount === 0) {
+            embed.setDescription(`No results found for \`${query}\`.`).setColor('#FF0000');
+        }
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setLabel('View Full Results on Leakosint')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(`https://leakosint.com/search?search=${encodeURIComponent(query)}`)
+            );
+
+        await message.channel.send({ embeds: [embed], components: [row] });
 
     } catch (error) {
-        console.error('!!! SEARCH ERROR !!!');
-        console.error('Error Details:', error);
-
-        let errorMessage = 'An unknown error occurred while searching.';
-        if (error.response) {
-            console.error('API Response Status:', error.response.status);
-            console.error('API Response Data:', error.response.data);
-            errorMessage = `API Error: ${error.response.status} - ${error.response.data.error || 'Unknown API Error'}`;
-        } else if (error.request) {
-            console.error('No response received from API. The server might be down.');
-            errorMessage = 'Could not connect to the search API. The server may be down.';
-        } else {
-            console.error('Error Message:', error.message);
-            errorMessage = `Request setup error: ${error.message}`;
-        }
-        
-        try {
-            await message.reply(errorMessage);
-        } catch(replyError) {
-            console.error('Failed to send error message to Discord:', replyError);
+        console.error('!!! PUPPETEER SEARCH ERROR !!!');
+        console.error(error);
+        await message.reply('Failed to fetch results. The website may be down or the search timed out.');
+    } finally {
+        if (browser) {
+            await browser.close();
+            console.log('Browser closed.');
         }
     }
 });
