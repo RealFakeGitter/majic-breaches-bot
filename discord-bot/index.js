@@ -16,7 +16,7 @@ const client = new Client({
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`); // <-- FIXED
+    console.log(`Logged in as ${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
@@ -32,7 +32,7 @@ client.on('messageCreate', async message => {
     // Let the user know the bot is working
     await message.reply(`Searching for \`${query}\`... This may take a moment.`);
 
-    console.log(`Received search command for query: "${query}"`); // <-- FIXED
+    console.log(`Received search command for query: "${query}"`);
 
     let browser;
     try {
@@ -65,6 +65,12 @@ client.on('messageCreate', async message => {
         const resultsHtml = await page.$eval('#results', el => el.innerHTML);
 
         console.log('Results found. Parsing HTML...');
+        
+        // --- DEBUGGING LOGS ---
+        console.log('--- RAW HTML SCRAPED ---');
+        console.log(resultsHtml);
+        console.log('--- END RAW HTML ---');
+        // --- END DEBUGGING LOGS ---
 
         // --- Format and Send the Response ---
         const embed = new EmbedBuilder()
@@ -101,9 +107,9 @@ client.on('messageCreate', async message => {
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setLabel('View Full Results on Leakosint')
+                    .setLabel('View Full Results on Majic Breaches')
                     .setStyle(ButtonStyle.Link)
-                    .setURL(`https://leakosint.com/search?search=${encodeURIComponent(query)}`)
+                    .setURL(`https://majicbreaches.iceiy.com/search?search=${encodeURIComponent(query)}`) // <-- CORRECTED URL
             );
 
         await message.channel.send({ embeds: [embed], components: [row] });
