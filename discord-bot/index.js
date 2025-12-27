@@ -79,24 +79,32 @@ client.on('messageCreate', async message => {
             .setDescription(`Results for: \`${query}\``)
             .setColor('#00bfff');
 
-        // This is a simple HTML parser. It looks for <b> tags (database names)
-        // and the text immediately following them (the info).
-        const results = resultsHtml.split('<br>');
+        // New parser for the actual HTML structure
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(resultsHtml, 'text/html');
+        const breachSections = doc.querySelectorAll('.breach-section');
         let resultCount = 0;
-        for (const result of results) {
+
+        for (const section of breachSections) {
             if (resultCount >= 10) break; // Limit to 10 results
 
-            const dbNameMatch = result.match(/<b>(.*?)<\/b>/);
-            const infoMatch = result.match(/<\/b>\s*(.*?)(?:<br>|$)/);
+            const dbName = section.querySelector('h2')?.textContent.trim();
+            const description = section.querySelector('p')?.textContent.trim();
+            const firstRow = section.querySelector('tbody tr');
 
-            if (dbNameMatch && infoMatch) {
-                const dbName = dbNameMatch[1];
-                const info = infoMatch[1].trim();
+            if (dbName && firstRow) {
+                const cells = firstRow.querySelectorAll('td');
+                const rowData = Array.from(cells).map(cell => cell.textContent.trim()).join(' | ');
                 
                 // Clean up common HTML entities
-                const cleanInfo = info.replace(/&lt;/g, '<').replace(/&gt;/g, '>').substring(0, 1024);
+                const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+                
+                let fieldText = cleanDescription;
+                if (rowData) {
+                    fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
+                }
 
-                embed.addFields({ name: `🔓 ${dbName}`, value: cleanInfo, inline: false });
+                embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
                 resultCount++;
             }
         }
