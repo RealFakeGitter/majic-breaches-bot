@@ -17,7 +17,7 @@ const client = new Client({
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as \${client.user.tag}!`);
+    console.log(`Logged in as ${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
@@ -32,7 +32,7 @@ client.on('messageCreate', async message => {
 
     // Let the user know the bot is working
     await message.reply(`Searching for \`${query}\`... This may take a moment.`);
-    console.log(`Received search command for query: "\${query}"`);
+    console.log(`Received search command for query: "${query}"`);
 
     let browser;
     try {
@@ -103,7 +103,7 @@ client.on('messageCreate', async message => {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
 
-                embed.addFields({ name: `🔓 \${dbName}`, value: fieldText.substring(0, 1024), inline: false });
+                embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
                 resultCount++;
             }
         });
@@ -117,4 +117,22 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder()
                     .setLabel('View Full Results on Majic Breaches')
                     .setStyle(ButtonStyle.Link)
-                    .
+                    .setURL(`https://majicbreaches.iceiy.com/`)
+            );
+
+        await message.channel.send({ embeds: [embed], components: [row] });
+
+    } catch (error) {
+        console.error('!!! PUPPETEER SEARCH ERROR !!!');
+        console.error(error);
+        await message.reply('Failed to fetch results. The website may be down or the search timed out.');
+    } finally {
+        if (browser) {
+            await browser.close();
+            console.log('Browser closed.');
+        }
+    }
+});
+
+// --- Login ---
+client.login(BOT_TOKEN);
