@@ -1,4 +1,4 @@
-const { Client } = require('@revolt/node');
+const { Client } = require('revolt.js');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const axios = require('axios'); // Needed for file uploads
