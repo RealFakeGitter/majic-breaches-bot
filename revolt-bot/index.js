@@ -1,373 +1,189 @@
-// Auto-generate package.json if it doesn't exist
-const fs = require('fs');
-const path = require('path');
+const { Client } = require('@revolt/node');
+const puppeteer = require('puppeteer');
+const cheerio = require('cheerio');
+const axios = require('axios'); // Needed for file uploads
 
-const packageJsonPath = path.join(__dirname, 'package.json');
-if (!fs.existsSync(packageJsonPath)) {
-  const packageJson = {
-    "name": "majic-breaches-revolt-bot",
-    "version": "1.0.0",
-    "description": "Revolt bot for Majic Breaches search",
-    "main": "index.js",
-    "scripts": {
-      "start": "node index.js",
-      "dev": "node index.js",
-      "build": "echo 'No build step required'"
-    },
-    "dependencies": {
-      "revolt.js": "^7.2.0",
-      "dotenv": "^16.6.1"
-    },
-    "engines": {
-      "node": ">=18.0.0"
-    }
-  };
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-  console.log('Generated package.json');
-}
+// --- Configuration ---
+const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
+const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
-require('dotenv').config();
-const { Client } = require('revolt.js');
-
-// Use Node.js built-in fetch (available in Node.js 18+)
-console.log('✅ Using Node.js built-in fetch');
-
-// Import keep-alive functionality
-try {
-  require('./keep-alive');
-} catch (error) {
-  console.log('Keep-alive not found, continuing without it...');
-}
-
-// Validate environment variables
-const convexUrl = process.env.CONVEX_URL;
-if (!convexUrl) {
-  console.error('❌ No CONVEX_URL found! Please set CONVEX_URL environment variable.');
-  process.exit(1);
-}
-
-console.log(`🔗 Connecting to Convex: ${convexUrl}`);
-
+// --- Initialize Client ---
 const client = new Client({
-  unreads: true,
-  autoReconnect: true,
+    intents: ['Messages', 'MessageContent']
 });
 
-client.on('ready', async () => {
-  console.log(`✅ Logged in as ${client.user?.username || 'Unknown'}!`);
-  console.log(`🤖 Bot ID: ${client.user?._id || 'Unknown'}`);
-  
-  // Fix: Check if servers exists and is iterable before trying to iterate
-  if (client.servers && typeof client.servers.size !== 'undefined') {
-    console.log(`🔗 Connected to ${client.servers.size || 0} servers`);
-    
-    // List all servers and channels for debugging
-    console.log('📋 Server details:');
-    try {
-      for (const [serverId, server] of client.servers) {
-        console.log(`  Server: ${server.name} (ID: ${serverId})`);
-        if (server.channels && typeof server.channels[Symbol.iterator] === 'function') {
-          for (const [channelId, channel] of server.channels) {
-            console.log(`    Channel: ${channel.name} (ID: ${channelId})`);
-          }
-        }
-      }
-    } catch (iterError) {
-      console.log('⚠️ Could not iterate servers/channels:', iterError.message);
+// --- Event Listeners ---
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.username}!`);
+    console.log('Revolt bot is ready to receive search commands.');
+});
+
+client.on('message', async message => {
+    // Ignore messages from bots
+    if (message.author.bot) return;
+    // Check for the command
+    if (!message.content.startsWith('!search')) return;
+
+    const query = message.content.substring(7).trim();
+    if (!query) {
+        return message.reply('Please provide a search term. Example: `!search email@example.com`');
     }
-  } else {
-    console.log('🔗 Connected to 0 servers (or servers not loaded yet)');
-  }
-  
-  console.log('🎯 Ready to receive commands!');
-});
 
-// Use messageCreate event (this is what's actually firing)
-client.on('messageCreate', async (message) => {
-  console.log('📨 "messageCreate" event triggered');
-  await handleMessage(message);
-});
+    // Let the user know the bot is working
+    await message.reply(`Searching for \`${query}\`... This may take a moment.`);
+    console.log(`Received search command for query: "${query}"`);
 
-async function handleMessage(message) {
-  // Enhanced logging for debugging
-  console.log(`📨 Message received:`);
-  console.log(`  Content: "${message.content || 'No content'}"`);
-  console.log(`  Author: ${message.author?.username || 'Unknown'}`);
-  console.log(`  Author ID: ${message.author?._id || 'Unknown'}`);
-  console.log(`  Bot User ID: ${client.user?._id || 'Unknown'}`);
-  console.log(`  Channel: ${message.channel?._id || 'Unknown'}`);
-  console.log(`  Is Bot: ${message.author?.bot || false}`);
-  
-  // Fix: Only ignore if it's actually a bot AND we can verify it
-  // Don't ignore messages if we can't determine the IDs properly
-  if (message.author?.bot === true) {
-    console.log('🤖 Ignoring confirmed bot message');
-    return;
-  }
-  
-  // Only ignore own messages if we can actually verify both IDs exist and match
-  if (message.author?._id && client.user?._id && message.author._id === client.user._id) {
-    console.log('🤖 Ignoring confirmed own message');
-    return;
-  }
-  
-  console.log('✅ Message passed bot/own message checks, proceeding...');
-  
-  // Temporary: respond to any message for testing
-  if (message.content === 'test') {
-    console.log('🧪 Test message detected, sending response...');
+    let browser;
     try {
-      await message.reply('✅ Bot is receiving messages!');
-      console.log('✅ Test response sent');
-    } catch (error) {
-      console.error('❌ Failed to send test response:', error);
-    }
-    return;
-  }
-  
-  // Only respond to messages that start with !breach
-  if (!message.content?.startsWith('!breach')) {
-    console.log('❌ Message does not start with !breach');
-    return;
-  }
-  
-  console.log('✅ Processing !breach command');
-  
-  const args = message.content.slice(7).trim().split(/ +/);
-  const command = args.shift()?.toLowerCase();
-  
-  try {
-    if (command === 'ping') {
-      console.log('🏓 Sending ping response...');
-      await message.reply('🏓 Pong! Bot is working!');
-      console.log('✅ Ping response sent successfully');
-      return;
-    } else if (command === 'test') {
-      const testUrl = `${convexUrl}/api/test`;
-      const testResponse = await fetch(testUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test: 'revolt' }),
-      });
-      const result = await testResponse.json();
-      await message.reply(`Test: ${JSON.stringify(result).substring(0, 100)}`);
-      return;
-    } else if (command === 'search') {
-      if (args.length === 0) {
-        await message.reply('❌ Please provide a search query. Usage: `!breach search <query>`');
-        return;
-      }
-      
-      const query = args.join(' ');
-      console.log(`Revolt search: ${query}`);
-      
-      // Use the correct HTTP endpoint with fetch
-      const searchUrl = `${convexUrl}/api/search`;
-      console.log(`Making request to: ${searchUrl}`);
-      
-      const requestBody = {
-        query,
-        limit: 100, // API requires minimum 100
-        platform: 'revolt'
-      };
-      console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
-      
-      try {
-        console.log('🔍 Making fetch request with:');
-        console.log('  URL:', searchUrl);
-        console.log('  Method: POST');
-        console.log('  Headers:', { 'Content-Type': 'application/json' });
-        console.log('  Body:', JSON.stringify(requestBody));
-        
-        const searchResponse = await fetch(searchUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Majic-Breaches-Revolt-Bot/1.0',
-          },
-          body: JSON.stringify(requestBody),
+        // --- Launch Puppeteer Browser ---
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
 
-        console.log('🔍 Response status:', searchResponse.status);
-        console.log('🔍 Response ok:', searchResponse.ok);
+        const page = await browser.newPage();
+        await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
 
-        if (!searchResponse.ok) {
-          const errorText = await searchResponse.text();
-          console.error('Search API error:', errorText);
-          await message.reply(`❌ Search failed: ${errorText}`);
-          return;
-        }
+        console.log('Navigated to website, waiting for search input...');
 
-        const searchData = await searchResponse.json();
-        
-        // Debug logging to see what we're getting
-        console.log('🔍 Search API Response:', JSON.stringify(searchData, null, 2));
-        console.log('🔍 searchData.success:', searchData.success);
-        console.log('🔍 searchData.results:', searchData.results);
-        console.log('🔍 searchData.results.length:', searchData.results?.length);
-        
-        if (!searchData.success || !searchData.results || searchData.results.length === 0) {
-          console.log('❌ No results condition triggered');
-          await message.reply(`🔍 No results found for: **${query}**\n\nDebug info:\n- Success: ${searchData.success}\n- Results: ${searchData.results ? searchData.results.length : 'null'}\n- Error: ${searchData.error || 'none'}`);
-          return;
-        }
-        
-        const preview = searchData.results.slice(0, 2);
-        let response = `🔍 **Breach Search Results**\n\nFound **${searchData.resultCount}** results for: **${query}**\n\n`;
-        
-        preview.forEach((breach, index) => {
-          // Truncate breach name if it's too long
-          const truncatedBreachName = breach.breachName.length > 200 
-            ? breach.breachName.substring(0, 200) + '...' 
-            : breach.breachName;
-          
-          response += `**${index + 1}. ${truncatedBreachName}**\n`;
-          if (breach.breachDate) {
-            response += `📅 Date: ${breach.breachDate}\n`;
-          }
-          response += `🎯 Matched Field: ${breach.matchedField}\n`;
-          response += `📋 Data Types: ${breach.dataTypes.join(', ')}\n`;
-          
-          // Show the actual breach content (email, password, etc.) with better formatting
-          if (breach.content) {
-            response += `\n**🔍 Breach Data:**\n`;
-            const contentLines = breach.content.split('\n').filter(line => line.trim());
-            // Limit to first 8 lines for Revolt (more generous than Discord)
-            const limitedLines = contentLines.slice(0, 8);
-            limitedLines.forEach(line => {
-              response += `\`${line}\`\n`;
-            });
-            if (contentLines.length > 8) {
-              response += `*... and ${contentLines.length - 8} more lines*\n`;
+        // --- Perform the Search ---
+        await page.waitForSelector('#searchInput', { timeout: 10000 });
+        await page.type('#searchInput', query);
+        await page.keyboard.press('Enter');
+
+        console.log('Search submitted, waiting for results...');
+
+        await page.waitForSelector('#results', { timeout: 15000 });
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
+
+        // --- Scrape the Results ---
+        const resultsHtml = await page.$eval('#results', el => el.innerHTML);
+        console.log('Results found. Parsing HTML...');
+
+        // --- Format and Send the Response ---
+        // Revolt uses a different embed structure
+        const embed = {
+            title: 'Majic Breaches Search Results',
+            description: `Results for: \`${query}\``,
+            colour: '#00bfff' // Use 'colour' for Revolt
+        };
+
+        // Parser for the preview embed (max 10 results)
+        const $ = cheerio.load(resultsHtml);
+        const breachSections = $('.breach-section');
+        let resultCount = 0;
+        const fields = [];
+
+        breachSections.each((i, section) => {
+            if (resultCount >= 10) return false;
+
+            const dbName = $(section).find('h2').first().text().trim();
+            const description = $(section).find('p').first().text().trim();
+            const firstRow = $(section).find('tbody tr').first();
+
+            if (dbName && firstRow.length) {
+                const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
+                const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+                
+                let fieldText = cleanDescription;
+                if (rowData) {
+                    fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
+                }
+                fields.push({
+                    name: `🔓 ${dbName}`,
+                    value: fieldText.substring(0, 1024),
+                    inline: false
+                });
+                resultCount++;
             }
-          }
-          
-          if (breach.recordCount) {
-            response += `📊 Records: ${breach.recordCount.toLocaleString()}\n`;
-          }
-          response += '\n';
         });
-        
-        if (searchData.resultCount > 2) {
-          response += `*... and ${searchData.resultCount - 2} more results*\n\n`;
+
+        if (resultCount === 0) {
+            embed.description = `No results found for \`${query}\`.`;
+            embed.colour = '#FF0000';
+        } else {
+            embed.fields = fields;
         }
-        
-        // Use the correct web app URL - prioritize WEB_APP_URL, then fallback to a default
-        const webAppUrl = process.env.WEB_APP_URL || 'https://majic-breaches-bot.vercel.app';
-        response += `🔗 **[View Full Results](${webAppUrl}/search-results?id=${searchData.searchId})**\n\n`;
-        response += `⚠️ *Use responsibly for security research purposes only*`;
-        
-        await message.reply(response);
-      } catch (fetchError) {
-        console.error('Fetch error:', fetchError);
-        await message.reply('❌ Failed to connect to search service');
-      }
-      
-    } else if (command === 'stats') {
-      try {
-        const statsUrl = `${convexUrl}/api/stats`;
-        const statsResponse = await fetch(statsUrl);
-        
-        if (!statsResponse.ok) {
-          await message.reply('❌ Failed to get statistics');
-          return;
+
+        // --- Prepare and send the file attachment ---
+        if (resultCount > 0) {
+            let fileContent = `Majic Breaches Search Results for: ${query}\n`;
+            fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
+            fileContent += '==================================================\n\n';
+
+            const allBreachSections = $('.breach-section');
+            allBreachSections.each((i, section) => {
+                const dbName = $(section).find('h2').first().text().trim();
+                const description = $(section).find('p').first().text().trim();
+                const rows = $(section).find('tbody tr');
+                
+                fileContent += `--- Database: ${dbName} ---\n`;
+                fileContent += `${description}\n\n`;
+
+                if (rows.length > 0) {
+                    const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
+                    fileContent += headers.join('\t') + '\n';
+                    fileContent += '----------------------------------------\n';
+                    
+                    rows.each((j, row) => {
+                        const rowData = $(row).find('td').map((k, el) => $(el).text().trim()).get().join('\t');
+                        fileContent += rowData + '\n';
+                    });
+                } else {
+                    fileContent += 'No data found in this entry.\n';
+                }
+                fileContent += '\n==================================================\n\n';
+            });
+
+            const buffer = Buffer.from(fileContent, 'utf-8');
+            const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+
+            // Revolt requires uploading the file first to get an ID
+            const { id } = await client.rest.post('/attachments/upload', {
+                files: [
+                    {
+                        filename: fileName,
+                        content: buffer.toString('base64'), // Upload as base64
+                    }
+                ]
+            });
+
+            // Now send the message with the embed and the attachment ID
+            await message.channel.sendMessage({
+                content: "Here are your results.",
+                embeds: [embed],
+                attachments: [id] // Use the attachment ID
+            });
+
+        } else {
+            // If no results, just send the embed
+            await message.channel.sendMessage({ embeds: [embed] });
         }
-        
-        const stats = await statsResponse.json();
-        
-        const response = `📊 **Bot Statistics**\n\n🔍 Total Searches: **${stats.totalSearches.toLocaleString()}**\n📋 Total Results: **${stats.totalResults.toLocaleString()}**`;
-        
-        await message.reply(response);
-      } catch (fetchError) {
-        console.error('Stats fetch error:', fetchError);
-        await message.reply('❌ Failed to get statistics');
-      }
-      
-    } else if (command === 'help') {
-      const response = `🤖 **Majic Breaches Bot Help**\n\nSearch data breaches for security research and OSINT purposes.\n\n**Commands:**\n\`!breach ping\` - Test bot connection\n\`!breach search <query>\` - Search breaches\n\`!breach stats\` - Show statistics\n\`!breach help\` - Show this help\n\n⚠️ **Important:** This bot is for educational and security research purposes only. Use responsibly and in accordance with applicable laws.`;
-      
-      await message.reply(response);
-    } else {
-      await message.reply('❌ Unknown command. Use `!breach help` for available commands.');
+
+    } catch (error) {
+        console.error('!!! PUPPETEER SEARCH ERROR !!!');
+        console.error(error);
+        await message.reply('Failed to fetch results. The website may be down or the search timed out.');
+    } finally {
+        if (browser) {
+            await browser.close();
+            console.log('Browser closed.');
+        }
     }
-  } catch (error) {
-    console.error('Command error:', error);
-    try {
-      await message.reply('❌ An error occurred while processing your request.');
-    } catch (replyError) {
-      console.error('Failed to send error reply:', replyError);
-    }
-  }
-}
-
-// Enhanced error handling and logging
-client.on('error', (error) => {
-  console.error('Revolt client error:', error);
 });
 
-client.on('disconnect', () => {
-  console.log('Disconnected from Revolt');
+// --- Login ---
+client.login(BOT_TOKEN);
+
+// --- Simple Ping Server for Uptime Monitoring ---
+const express = require('express');
+const pingApp = express();
+const port = process.env.PORT || 3000;
+
+pingApp.get('/', (req, res) => {
+  res.status(200).send('OK');
 });
 
-// Add more debugging events
-client.on('packet', (packet) => {
-  if (packet.type === 'Message') {
-    console.log('📦 Raw message packet received:', JSON.stringify(packet, null, 2));
-  }
+pingApp.listen(port, () => {
+  console.log(`Ping server listening on port ${port}`);
 });
-
-client.on('messageUpdate', (message) => {
-  console.log('📝 messageUpdate event fired:', message.content);
-});
-
-// Log all events for debugging
-const originalEmit = client.emit;
-client.emit = function(event, ...args) {
-  if (event !== 'packet') { // Don't log packet events to avoid spam
-    console.log(`🎪 Event fired: ${event}`);
-  }
-  return originalEmit.call(this, event, ...args);
-};
-
-// Login with better error handling
-const token = process.env.REVOLT_BOT_TOKEN || process.env.REVOLT_TOKEN;
-if (!token || token === 'YOUR_ACTUAL_TOKEN_HERE') {
-  console.error('❌ No valid bot token found! Please set REVOLT_BOT_TOKEN environment variable.');
-  console.error('Current token value:', token ? 'Set but may be placeholder' : 'Not set');
-  process.exit(1);
-}
-
-console.log('🔄 Attempting to login to Revolt...');
-console.log('Token length:', token.length);
-console.log('Token starts with:', token.substring(0, 10) + '...');
-
-client.loginBot(token).then(() => {
-  console.log('✅ Login successful!');
-}).catch(error => {
-  console.error('❌ Failed to login to Revolt:', error);
-  console.error('Error details:', error.message);
-  process.exit(1);
-});
-
-/*
-PACKAGE.JSON CONTENT FOR REVOLT BOT:
-{
-  "name": "majic-breaches-revolt-bot",
-  "version": "1.0.0",
-  "description": "Revolt bot for Majic Breaches search",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
-  },
-  "dependencies": {
-    "revolt.js": "^7.2.0",
-    "convex": "^1.28.0",
-    "dotenv": "^16.6.1",
-    "node-fetch": "^3.3.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
-}
-*/
