@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const puppeteer = require('puppeteer');
+const cheerio = require('cheerio'); // <-- Added Cheerio
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -16,7 +17,7 @@ const client = new Client({
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as \${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
@@ -31,7 +32,7 @@ client.on('messageCreate', async message => {
 
     // Let the user know the bot is working
     await message.reply(`Searching for \`${query}\`... This may take a moment.`);
-    console.log(`Received search command for query: "${query}"`);
+    console.log(`Received search command for query: "\${query}"`);
 
     let browser;
     try {
@@ -79,22 +80,20 @@ client.on('messageCreate', async message => {
             .setDescription(`Results for: \`${query}\``)
             .setColor('#00bfff');
 
-        // New parser for the actual HTML structure
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(resultsHtml, 'text/html');
-        const breachSections = doc.querySelectorAll('.breach-section');
+        // New parser using Cheerio for Node.js
+        const $ = cheerio.load(resultsHtml);
+        const breachSections = $('.breach-section');
         let resultCount = 0;
 
-        for (const section of breachSections) {
-            if (resultCount >= 10) break; // Limit to 10 results
+        breachSections.each((i, section) => {
+            if (resultCount >= 10) return false; // Limit to 10 results
 
-            const dbName = section.querySelector('h2')?.textContent.trim();
-            const description = section.querySelector('p')?.textContent.trim();
-            const firstRow = section.querySelector('tbody tr');
+            const dbName = $(section).find('h2').first().text().trim();
+            const description = $(section).find('p').first().text().trim();
+            const firstRow = $(section).find('tbody tr').first();
 
-            if (dbName && firstRow) {
-                const cells = firstRow.querySelectorAll('td');
-                const rowData = Array.from(cells).map(cell => cell.textContent.trim()).join(' | ');
+            if (dbName && firstRow.length) {
+                const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
                 
                 // Clean up common HTML entities
                 const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -104,10 +103,10 @@ client.on('messageCreate', async message => {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
 
-                embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
+                embed.addFields({ name: `🔓 \${dbName}`, value: fieldText.substring(0, 1024), inline: false });
                 resultCount++;
             }
-        }
+        });
 
         if (resultCount === 0) {
             embed.setDescription(`No results found for \`${query}\`.`).setColor('#FF0000');
@@ -118,22 +117,4 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder()
                     .setLabel('View Full Results on Majic Breaches')
                     .setStyle(ButtonStyle.Link)
-                    .setURL(`https://majicbreaches.iceiy.com/`)
-            );
-
-        await message.channel.send({ embeds: [embed], components: [row] });
-
-    } catch (error) {
-        console.error('!!! PUPPETEER SEARCH ERROR !!!');
-        console.error(error);
-        await message.reply('Failed to fetch results. The website may be down or the search timed out.');
-    } finally {
-        if (browser) {
-            await browser.close();
-            console.log('Browser closed.');
-        }
-    }
-});
-
-// --- Login ---
-client.login(BOT_TOKEN);
+                    .
