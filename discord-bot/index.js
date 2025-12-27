@@ -29,8 +29,8 @@ client.on('messageCreate', async message => {
         return message.reply('Please provide a search term. Example: `!search email@example.com`');
     }
 
-    // Let the user know the bot is working by deferring the reply
-    await message.deferReply();
+    // Let the user know the bot is working
+    await message.reply(`Searching for \`${query}\`... This may take a moment.`);
     console.log(`Received search command for query: "${query}"`);
 
     let browser;
@@ -58,8 +58,8 @@ client.on('messageCreate', async message => {
 
         // Wait for the results container to appear
         await page.waitForSelector('#results', { timeout: 15000 });
-        // Wait for the loading message to disappear, meaning the content is loaded
-        await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 20000 });
+        // Wait a fixed 5 seconds for the JS to populate the results, then check for content
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // --- Scrape the Results ---
         // Get the raw HTML of the results container
@@ -113,7 +113,7 @@ client.on('messageCreate', async message => {
                     .setURL(`https://majicbreaches.iceiy.com/`)
             );
 
-        await message.editReply({ embeds: [embed], components: [row] });
+        await message.channel.send({ embeds: [embed], components: [row] });
 
     } catch (error) {
         console.error('!!! PUPPETEER SEARCH ERROR !!!');
