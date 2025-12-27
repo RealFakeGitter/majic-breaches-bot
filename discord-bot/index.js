@@ -109,7 +109,7 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder()
                     .setLabel('View Full Results on Majic Breaches')
                     .setStyle(ButtonStyle.Link)
-                    .setURL(`https://majicbreaches.iceiy.com/search?search=${encodeURIComponent(query)}`) // <-- CORRECTED URL
+                    .setURL(`https://majicbreaches.iceiy.com/`) // <-- CORRECTED URL
             );
 
         await message.channel.send({ embeds: [embed], components: [row] });
