@@ -9,11 +9,21 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "revolt.js": "^7.2.0",
-    "convex": "^1.28.0",
-    "dotenv": "^16.6.1"
+    "@revolt/node": "^0.6.3",
+      "axios": "^1.6.0",
+     "cheerio": "^1.0.0-rc.12",
+    "express": "^3.18.2" ,
+    "dotenv": "^16.6.1",
+    "puppeteer": "^4.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
   }
 }
+
+
+
+
+  
+    
+    
