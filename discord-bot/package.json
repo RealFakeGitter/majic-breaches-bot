@@ -11,11 +11,11 @@
   "dependencies": {
     "axios": "^1.6.0",
      "cheerio": "^1.0.0-rc.12",
-    "express": "^1.18.2" ,
+    "express": "^2.18.2" ,
     "discord.js": "^14.22.1",
     "convex": "^1.28.0", 
       "dotenv": "^16.6.1" ,
-    "puppeteer": "^1.0.0"
+    "puppeteer": "^3.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
