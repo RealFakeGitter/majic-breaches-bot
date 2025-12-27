@@ -1,6 +1,6 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const puppeteer = require('puppeteer');
-const cheerio = require('cheerio'); // <-- Added Cheerio
+const cheerio = require('cheerio');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -38,8 +38,8 @@ client.on('messageCreate', async message => {
     try {
         // --- Launch Puppeteer Browser ---
         browser = await puppeteer.launch({
-            headless: true, // Run in the background
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Required for running on Render
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
 
         const page = await browser.newPage();
@@ -48,31 +48,18 @@ client.on('messageCreate', async message => {
         console.log('Navigated to website, waiting for search input...');
 
         // --- Perform the Search ---
-        // Wait for the search input field to be available
         await page.waitForSelector('#searchInput', { timeout: 10000 });
-        
-        // Type the query and press Enter
         await page.type('#searchInput', query);
         await page.keyboard.press('Enter');
 
         console.log('Search submitted, waiting for results...');
 
-        // Wait for the results container to appear
         await page.waitForSelector('#results', { timeout: 15000 });
-        // Wait a fixed 5 seconds for the JS to populate the results, then check for content
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
 
         // --- Scrape the Results ---
-        // Get the raw HTML of the results container
         const resultsHtml = await page.$eval('#results', el => el.innerHTML);
-
         console.log('Results found. Parsing HTML...');
-        
-        // --- DEBUGGING LOGS ---
-        console.log('--- RAW HTML SCRAPED ---');
-        console.log(resultsHtml);
-        console.log('--- END RAW HTML ---');
-        // --- END DEBUGGING LOGS ---
 
         // --- Format and Send the Response ---
         const embed = new EmbedBuilder()
@@ -80,13 +67,13 @@ client.on('messageCreate', async message => {
             .setDescription(`Results for: \`${query}\``)
             .setColor('#00bfff');
 
-        // New parser using Cheerio for Node.js
+        // Parser for the preview embed (max 10 results)
         const $ = cheerio.load(resultsHtml);
         const breachSections = $('.breach-section');
         let resultCount = 0;
 
         breachSections.each((i, section) => {
-            if (resultCount >= 10) return false; // Limit to 10 results
+            if (resultCount >= 10) return false;
 
             const dbName = $(section).find('h2').first().text().trim();
             const description = $(section).find('p').first().text().trim();
@@ -94,15 +81,12 @@ client.on('messageCreate', async message => {
 
             if (dbName && firstRow.length) {
                 const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
-                
-                // Clean up common HTML entities
                 const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
                 
                 let fieldText = cleanDescription;
                 if (rowData) {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
-
                 embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
                 resultCount++;
             }
@@ -112,15 +96,45 @@ client.on('messageCreate', async message => {
             embed.setDescription(`No results found for \`${query}\`.`).setColor('#FF0000');
         }
 
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setLabel('View Full Results on Majic Breaches')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(`https://majicbreaches.iceiy.com/`)
-            );
+        // --- Prepare and send the file attachment ---
+        if (resultCount > 0) {
+            let fileContent = `Majic Breaches Search Results for: ${query}\n`;
+            fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
+            fileContent += '==================================================\n\n';
 
-        await message.channel.send({ embeds: [embed], components: [row] });
+            const allBreachSections = $('.breach-section');
+            allBreachSections.each((i, section) => {
+                const dbName = $(section).find('h2').first().text().trim();
+                const description = $(section).find('p').first().text().trim();
+                const rows = $(section).find('tbody tr');
+                
+                fileContent += `--- Database: ${dbName} ---\n`;
+                fileContent += `${description}\n\n`;
+
+                if (rows.length > 0) {
+                    const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
+                    fileContent += headers.join('\t') + '\n';
+                    fileContent += '----------------------------------------\n';
+                    
+                    rows.each((j, row) => {
+                        const rowData = $(row).find('td').map((k, el) => $(el).text().trim()).get().join('\t');
+                        fileContent += rowData + '\n';
+                    });
+                } else {
+                    fileContent += 'No data found in this entry.\n';
+                }
+                fileContent += '\n==================================================\n\n';
+            });
+
+            const buffer = Buffer.from(fileContent, 'utf-8');
+            const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+            const attachment = new AttachmentBuilder(buffer, { name: fileName });
+
+            await message.channel.send({ embeds: [embed], files: [attachment] });
+
+        } else {
+            await message.channel.send({ embeds: [embed] });
+        }
 
     } catch (error) {
         console.error('!!! PUPPETEER SEARCH ERROR !!!');
