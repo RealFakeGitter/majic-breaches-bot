@@ -17,12 +17,13 @@ const client = new Client({
 
 // --- Event Listeners ---
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as \${client.user.tag}!`);
     console.log('Bot is ready to receive search commands.');
 });
 
 client.on('messageCreate', async message => {
-    if (message.author.bot && message.author.id !== client.user.id) return;
+    // Ignore messages from all bots, including this one
+    if (message.author.bot) return; 
     if (!message.content.startsWith('!search')) return;
 
     const query = message.content.substring(7).trim();
@@ -32,7 +33,7 @@ client.on('messageCreate', async message => {
 
     // Let the user know the bot is working
     await message.reply(`Searching for \`${query}\`... This may take a moment.`);
-    console.log(`Received search command for query: "${query}"`);
+    console.log(`Received search command for query: "\${query}"`);
 
     let browser;
     try {
@@ -87,7 +88,7 @@ client.on('messageCreate', async message => {
                 if (rowData) {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
-                embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
+                embed.addFields({ name: `🔓 \${dbName}`, value: fieldText.substring(0, 1024), inline: false });
                 resultCount++;
             }
         });
@@ -127,7 +128,7 @@ client.on('messageCreate', async message => {
             });
 
             const buffer = Buffer.from(fileContent, 'utf-8');
-            const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+            const fileName = `majic_results_\${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
             const attachment = new AttachmentBuilder(buffer, { name: fileName });
 
             await message.channel.send({ embeds: [embed], files: [attachment] });
@@ -150,3 +151,8 @@ client.on('messageCreate', async message => {
 
 // --- Login ---
 client.login(BOT_TOKEN);
+
+// --- Simple Ping Server for Uptime Monitoring (Optional) ---
+const express = require('express');
+const pingApp = express();
+const port = process.env
