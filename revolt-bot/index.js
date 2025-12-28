@@ -1,4 +1,4 @@
-const { API, WebSocket } = require('revolt-api');
+const { API } = require('revolt-api');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const axios = require('axios');
@@ -13,7 +13,7 @@ const api = new API({
     authentication: BOT_TOKEN
 });
 
-const ws = new WebSocket({
+const ws = api.websocket({
     baseURL: "wss://events.stoat.chat",
     authentication: BOT_TOKEN
 });
@@ -41,10 +41,10 @@ ws.on('message', async message => {
     }
 
     // Let the user know the bot is working
-    await api.post(`/channels/${message.channel_id}/messages`, {
+    await api.post(`/channels/\${message.channel_id}/messages`, {
         content: `Searching for \`${query}\`... This may take a moment.`
     });
-    console.log(`Received search command for query: "${query}"`);
+    console.log(`Received search command for query: "\${query}"`);
 
     let browser;
     try {
@@ -101,7 +101,7 @@ ws.on('message', async message => {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
                 fields.push({
-                    name: `🔓 ${dbName}`,
+                    name: `🔓 \${dbName}`,
                     value: fieldText.substring(0, 1024),
                     inline: false
                 });
@@ -170,7 +170,7 @@ ws.on('message', async message => {
     } catch (error) {
         console.error('!!! PUPPETEER SEARCH ERROR !!!');
         console.error(error);
-        await api.post(`/channels/${message.channel_id}/messages`, {
+        await api.post(`/channels/\${message.channel_id}/messages`, {
             content: 'Failed to fetch results. The website may be down or the search timed out.'
         });
     } finally {
@@ -197,6 +197,4 @@ pingApp.get('/', (req, res) => {
   res.status(200).send('OK');
 });
 
-pingApp.listen(port, () => {
-  console.log(`Ping server listening on port ${port}`);
-});
+pingApp.listen(port, () =>
