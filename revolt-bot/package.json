@@ -9,7 +9,7 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "revolt-api": "^2.0.0",
+    "revolt-api": "^0.8.9",
       "axios": "^1.7.9",
      "cheerio": "^1.0.0-rc.12",
     "express": "^3.21.2" ,
