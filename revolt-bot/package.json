@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "revolt-api": "^0.8.9",
-     "revolt.js": "^5.0.0", 
+     "revolt.js": "^7.2.0", 
       "axios": "^1.7.9",
      "cheerio": "^1.0.0-rc.12",
     "express": "^3.21.2" ,
