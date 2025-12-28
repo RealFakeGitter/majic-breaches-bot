@@ -115,7 +115,7 @@ ws.on('message', async (data) => {
                 breachSections = $('.p-4.mb-4.rounded.border'); // A common Tailwind class pattern
             }
             
-            console.log(`Found \${breachSections.length} potential result sections.`);
+            console.log(`Found ${breachSections.length} potential result sections.`);
 
             let resultCount = 0;
             const fields = [];
@@ -143,7 +143,7 @@ ws.on('message', async (data) => {
                         fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                     }
                     fields.push({
-                        name: `🔓 \${dbName}`,
+                        name: `🔓 ${dbName}`,
                         value: fieldText.substring(0, 1024),
                         inline: false
                     });
@@ -210,7 +210,8 @@ ws.on('message', async (data) => {
                             }]
                         });
                         attachments = [id];
-                    } catch (uploadError) {
+                    } catch (
+                        uploadError) {
                         console.error('!!! FILE UPLOAD ERROR !!!');
                         console.error(uploadError);
                     }
@@ -218,7 +219,7 @@ ws.on('message', async (data) => {
             }
 
             // Send the final message
-            await api.post(`/channels/\${message.channel}/messages`, {
+            await api.post(`/channels/${message.channel}/messages`, {
                 content: resultCount > 0 ? "Here are your results." : "",
                 embeds: [embed],
                 attachments: attachments
@@ -227,3 +228,30 @@ ws.on('message', async (data) => {
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
+            // Send a user-friendly error message
+            await api.post(`/channels/${message.channel}/messages`, {
+                content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.'
+            });
+
+        } finally {
+            // --- Clean Up ---
+            if (browser) {
+                await browser.close();
+                console.log('Browser closed.');
+            }
+        }
+
+    } catch (err) {
+        console.error('!!! WEBSOCKET MESSAGE ERROR !!!');
+        console.error(err);
+    }
+});
+
+ws.on('error', (err) => {
+    console.error('!!! WEBSOCKET ERROR !!!');
+    console.error(err);
+});
+
+ws.on('close', (code, reason) => {
+    console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+});
