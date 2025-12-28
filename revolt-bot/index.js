@@ -1,17 +1,3 @@
-// --- Mini Web Server for Render Health Check ---
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/health', (req, res) => {
-    res.status(200).send('OK');
-});
-
-app.listen(PORT, () => {
-    console.log(`Health check server listening on port ${PORT}`);
-});
-// --- End Mini Web Server ---
-
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
 const puppeteer = require('puppeteer-core');
@@ -111,65 +97,50 @@ const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-           // --- Format and Send the Response ---
+          // --- Format and Send the Response ---
 const embed = {
     title: 'Majic Breaches Search Results',
     colour: '#00bfff'
 };
 const $ = cheerio.load(resultsHtml);
 
-// --- TRY MULTIPLE SELECTORS ---
 console.log('Attempting to parse results...');
-let breachSections = $('.breach-section'); // Original selector
+let breachSections = $('.breach-section');
 console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
-if (breachSections.length === 0) {
-    console.log('Original selector failed, trying .card...');
-    breachSections = $('.card');
-    console.log(`Selector '.card' found: ${breachSections.length} elements.`);
-}
-if (breachSections.length === 0) {
-    console.log('Trying .result...');
-    breachSections = $('.result');
-    console.log(`Selector '.result' found: ${breachSections.length} elements.`);
-}
-if (breachSections.length === 0) {
-    console.log('Trying .panel...');
-    breachSections = $('.panel');
-    console.log(`Selector '.panel' found: ${breachSections.length} elements.`);
-}
-if (breachSections.length === 0) {
-    console.log('Trying .p-4.mb-4.rounded.border...');
-    breachSections = $('.p-4.mb-4.rounded.border');
-    console.log(`Selector '.p-4.mb-4.rounded.border' found: ${breachSections.length} elements.`);
-}
-console.log(`Final count of potential result sections: ${breachSections.length}.`);
 
 const fields = [];
 let resultCount = 0;
 
-try {
-    breachSections.each((i, section) => {
-        if (resultCount >= 10) return false; // Limit to 10 results
+// Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
+breachSections.each((i, section) => {
+    if (resultCount >= 10) return false; // Limit to 10 results
 
+    try {
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
         if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
 
         if (dbName) {
-            // *** SIMPLIFIED FIELD ***
-            fields.push({
-                name: dbName,
-                value: '✅ Found',
-                inline: true
-            });
-            resultCount++;
+            // Sanitize the name to remove any newlines or excessive whitespace
+            const cleanName = dbName.replace(/\s+/g, ' ').trim();
+            
+            // Add a check to ensure we don't have empty names
+            if (cleanName) {
+                fields.push({
+                    name: cleanName,
+                    value: '✅ Found',
+                    inline: true
+                });
+                resultCount++;
+            }
         }
-    });
-} catch (embedError) {
-    console.error('!!! ERROR WHILE BUILDING EMBED FIELDS !!!');
-    console.error(embedError);
-    console.log('A single bad result was skipped to prevent a crash.');
-}
+    } catch (fieldError) {
+        console.error(`Error processing field ${i}:`, fieldError);
+        // Continue to the next field
+    }
+});
+
+console.log(`Successfully built ${resultCount} fields.`);
 
 if (resultCount === 0) {
     embed.description = `No results found for \`${query}\`.`;
@@ -178,16 +149,18 @@ if (resultCount === 0) {
     embed.description = `Found ${resultCount} results for: \`${query}\``;
     embed.fields = fields;
 }
-                     // --- Send the Final Message ---
+
+// --- Send the Final Message ---
 console.log('Preparing to send final message...');
 try {
     const payload = { embeds: [embed] };
+    // Log the FINAL payload just before it's sent
     console.log('Payload being sent:', JSON.stringify(payload, null, 2));
     await api.post(`/channels/${message.channel}/messages`, payload);
-    console.log('!!! EMBED SENT SUCCESSFULLY !!!');
+    console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
 } catch (finalMessageError) {
     console.error('!!! FAILED TO SEND EMBED !!!');
-    console.error(finalMessageError);
+    console.error(finalMessageError.response?.data || finalMessageError); // Log the error response from Revolt if available
 }
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
