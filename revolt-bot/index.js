@@ -1,3 +1,17 @@
+// --- Mini Web Server for Render Health Check ---
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
+app.listen(PORT, () => {
+    console.log(`Health check server listening on port ${PORT}`);
+});
+// --- End Mini Web Server ---
+
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
 const puppeteer = require('puppeteer-core');
