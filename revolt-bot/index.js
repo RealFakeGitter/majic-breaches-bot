@@ -76,16 +76,14 @@ ws.on('message', async (data) => {
             await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
 
             // --- Scrape the Results ---
-            const resultsElement = await page.$('#results');
-            if (!resultsElement) {
-                console.log('Could not find the #results element on the page.');
-                await api.post(`/channels/${message.channel}/messages`, {
-                    content: 'Failed to fetch results. The website structure may have changed or no results were found.'
-                });
-                return;
-            }
-
-            const resultsHtml = await page.$eval('#results', el => el.innerHTML);
+const resultsElement = await page.$('#results');
+if (!resultsElement) {
+    console.log('Could not find the #results element on the page.');
+    await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' });
+    return;
+}
+// Safely get the HTML of the results element
+const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
             console.log('--- START OF RESULTS HTML ---');
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
