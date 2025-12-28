@@ -100,23 +100,30 @@ ws.on('message', async (data) => {
             const $ = cheerio.load(resultsHtml);
             
             // --- TRY MULTIPLE SELECTORS ---
-            let breachSections = $('.breach-section'); // Original selector
-            if (breachSections.length === 0) {
-                console.log('Original selector .breach-section failed, trying alternatives...');
-                breachSections = $('.card'); // Common alternative
-            }
-            if (breachSections.length === 0) {
-                breachSections = $('.result'); // Another common alternative
-            }
-            if (breachSections.length === 0) {
-                breachSections = $('.panel'); // Another common alternative
-            }
-            if (breachSections.length === 0) {
-                breachSections = $('.p-4.mb-4.rounded.border'); // A common Tailwind class pattern
-            }
-            
-            console.log(`Found ${breachSections.length} potential result sections.`);
-
+console.log('Attempting to parse results...');
+let breachSections = $('.breach-section'); // Original selector
+console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
+if (breachSections.length === 0) {
+    console.log('Original selector failed, trying .card...');
+    breachSections = $('.card');
+    console.log(`Selector '.card' found: ${breachSections.length} elements.`);
+}
+if (breachSections.length === 0) {
+    console.log('Trying .result...');
+    breachSections = $('.result');
+    console.log(`Selector '.result' found: ${breachSections.length} elements.`);
+}
+if (breachSections.length === 0) {
+    console.log('Trying .panel...');
+    breachSections = $('.panel');
+    console.log(`Selector '.panel' found: ${breachSections.length} elements.`);
+}
+if (breachSections.length === 0) {
+    console.log('Trying .p-4.mb-4.rounded.border...');
+    breachSections = $('.p-4.mb-4.rounded.border');
+    console.log(`Selector '.p-4.mb-4.rounded.border' found: ${breachSections.length} elements.`);
+}
+console.log(`Final count of potential result sections: ${breachSections.length}.`);
                        let resultCount = 0;
             // NEW CODE - MUCH SMALLER
 const fields = [];
