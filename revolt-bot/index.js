@@ -164,15 +164,33 @@ try {
             const attachments = []; // Always empty until the file upload is fixed.
             console.log('Skipping file upload due to known API issues.');
 
-          // Send the final message
+         // Send the final message
 console.log('Preparing to send final message...');
 try {
-    const payload = { content: "Test message. If you see this, the API works." };
+    // Let's build a minimal, valid embed from scratch
+    const embed = {
+        title: "Search Results",
+        description: `Found ${resultCount} potential breaches for "${query}".`,
+        color: 5814783, // A nice blue color
+        fields: [
+            {
+                name: "Test Field",
+                value: "This is a test to see if the embed itself works.",
+                inline: false
+            }
+        ]
+    };
+
+    const payload = {
+        content: "Here are your results.",
+        embeds: [embed]
+    };
+
     console.log('Payload being sent:', JSON.stringify(payload, null, 2));
     await api.post(`/channels/${message.channel}/messages`, payload);
-    console.log('!!! SIMPLE MESSAGE SENT SUCCESSFULLY !!!');
+    console.log('!!! MINIMAL EMBED SENT SUCCESSFULLY !!!');
 } catch (finalMessageError) {
-    console.error('!!! FAILED TO SEND SIMPLE MESSAGE !!!');
+    console.error('!!! FAILED TO SEND MINIMAL EMBED !!!');
     console.error(finalMessageError);
 }
 console.log('Final message API call has finished (either succeeded or failed).');
