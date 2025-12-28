@@ -167,19 +167,35 @@ try {
          // Send the final message
 console.log('Preparing to send final message...');
 try {
-    // Let's build a minimal, valid embed from scratch
-    const embed = {
-        title: "Search Results",
-        description: `Found ${resultCount} potential breaches for "${query}".`,
-        color: 5814783, // A nice blue color
-        fields: [
-            {
-                name: "Test Field",
-                value: "This is a test to see if the embed itself works.",
-                inline: false
-            }
-        ]
-    };
+   // Let's build a more complex, but still safe, embed
+const embed = {
+    title: "Search Results",
+    description: `Found ${resultCount} potential breaches for "${query}".`,
+    color: 5814783, // A nice blue color
+    fields: []
+};
+
+// Let's add a single field with data from the first breach
+if (breachSections.length > 0) {
+    const firstBreach = breachSections[0];
+    const breachTitle = firstBreach.querySelector('h2')?.textContent || 'Unknown Breach';
+    
+    // Get the first row of data from the table
+    const firstRow = firstBreach.querySelector('tbody tr');
+    let rowData = 'No data found.';
+    if (firstRow) {
+        const cells = firstRow.querySelectorAll('td');
+        // Sanitize the cell data to remove problematic characters
+        const cleanCells = Array.from(cells).map(cell => cell.textContent.trim().replace(/["`]/g, ''));
+        rowData = cleanCells.join(' | ');
+    }
+
+    embed.fields.push({
+        name: `Example from: ${breachTitle}`,
+        value: rowData,
+        inline: false
+    });
+}
 
     const payload = {
         content: "Here are your results.",
