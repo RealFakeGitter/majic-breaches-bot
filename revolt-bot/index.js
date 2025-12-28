@@ -156,17 +156,24 @@ ws.on('message', async (data) => {
                     fileContent += '\n==================================================\n\n';
                 });
 
+                // --- NEW: Check file size before uploading ---
                 const buffer = Buffer.from(fileContent, 'utf-8');
-                const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+                const fileSizeInMB = buffer.length / (1024 * 1024);
+                if (fileSizeInMB > 20) { // Check if file is larger than 20MB
+                    console.log(`File is too large (${fileSizeInMB.toFixed(2)}MB), skipping attachment.`);
+                    // Don't create an attachment, just send the embed.
+                } else {
+                    const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
 
-                // Upload the file
-                const { id } = await api.post('/attachments/upload', {
-                    files: [{
-                        filename: fileName,
-                        content: buffer.toString('base64'),
-                    }]
-                });
-                attachments = [id];
+                    // Upload the file
+                    const { id } = await api.post('/attachments/upload', {
+                        files: [{
+                            filename: fileName,
+                            content: buffer.toString('base64'),
+                        }]
+                    });
+                    attachments = [id];
+                }
             }
 
             // Send the final message
