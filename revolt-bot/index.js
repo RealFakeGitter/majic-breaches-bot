@@ -1,7 +1,7 @@
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
-const puppeteer = require('puppeteer-core'); // <-- Using puppeteer-core
-const chromium = require('@sparticuz/chromium'); // <-- AND the new chromium package
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
 const axios = require('axios');
 
@@ -58,9 +58,9 @@ ws.on('message', async (data) => {
         try {
             // --- Launch Puppeteer Browser ---
             browser = await puppeteer.launch({
-                executablePath: await chromium.executablePath(), // <-- Use the bundled browser
-                args: chromium.args, // <-- Use the recommended args
-                headless: chromium.headless, // <-- Use the recommended headless mode
+                executablePath: await chromium.executablePath(),
+                args: chromium.args,
+                headless: chromium.headless,
             });
 
             const page = await browser.newPage();
@@ -90,6 +90,10 @@ ws.on('message', async (data) => {
 
             const resultsHtml = await page.$eval('#results', el => el.innerHTML);
             console.log('Results found. Parsing HTML...');
+
+            // --- DEBUG: Take a screenshot to see what the bot sees ---
+            await page.screenshot({ path: 'debug_screenshot.png' });
+            console.log('Screenshot saved as debug_screenshot.png');
 
             // --- Format and Send the Response ---
             const embed = {
@@ -174,7 +178,7 @@ ws.on('message', async (data) => {
                 } else {
                     const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
 
-                    // --- NEW: Upload the file inside its own try/catch ---
+                    // --- Upload the file inside its own try/catch ---
                     try {
                         const { id } = await api.post('/attachments/upload', {
                             files: [{
@@ -202,9 +206,12 @@ ws.on('message', async (data) => {
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
-            await api.post(`/channels/${message.channel}/messages`, {
-                content: 'Failed to fetch results. The website may be down or the search timed out.'
-            });
+            // Only send a failure message if it was a real scraping error, not an upload error
+            if (!error.message.includes('FILE UPLOAD ERROR')) {
+                 await api.post(`/channels/${message.channel}/messages`, {
+                    content: 'Failed to fetch results. The website may be down or the search timed out.'
+                });
+            }
         } finally {
             if (browser) {
                 await browser.close();
@@ -231,10 +238,4 @@ ws.on('close', (code, reason) => {
 });
 
 // --- Simple Ping Server for Uptime Monitoring ---
-const express = require('express');
-const pingApp = express();
-const port = process.env.PORT || 3000;
-
-pingApp.get('/', (req, res) => {
-  res.status(200).send('OK');
-});
+const express = require
