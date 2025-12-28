@@ -46,9 +46,10 @@ ws.on('message', async (data) => {
         }
 
         // Let the user know the bot is working
-        await api.post(`/channels/${message.channel}/messages`, {
-            content: `Searching for \`${query}\`... This may take a moment.`
-        });
+      // Let the user know the bot is working
+console.log('Attempting to send "Searching..." message...');
+await api.post(`/channels/${message.channel}/messages`, { content: `Searching for \`${query}\`... This may take a moment.` })
+    .catch(e => console.error('Error sending "Searching..." message:', e));
         console.log(`Received search command for query: "${query}"`);
 
         let browser;
@@ -79,7 +80,9 @@ ws.on('message', async (data) => {
 const resultsElement = await page.$('#results');
 if (!resultsElement) {
     console.log('Could not find the #results element on the page.');
-    await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' });
+   console.log('Attempting to send "Could not find #results" message...');
+await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' })
+    .catch(e => console.error('Error sending "Could not find #results" message:', e));
     return;
 }
 // Safely get the HTML of the results element
@@ -169,9 +172,10 @@ console.log('Final message API call has finished (either succeeded or failed).')
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
             // Send a user-friendly error message
-            await api.post(`/channels/${message.channel}/messages`, {
-                content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.'
-            });
+            // Send a user-friendly error message
+console.log('Attempting to send "PUPPETEER ERROR" message...');
+await api.post(`/channels/${message.channel}/messages`, { content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.' })
+    .catch(e => console.error('Error sending "PUPPETEER ERROR" message:', e));
 
         } finally {
             // --- Clean Up ---
