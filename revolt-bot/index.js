@@ -112,23 +112,20 @@ const fields = [];
 let resultCount = 0;
 
 // Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
+// --- THIS IS THE NEW BLOCK ---
 breachSections.each((i, section) => {
     if (resultCount >= 10) return false; // Limit to 10 results
-
     try {
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
         if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-
         if (dbName) {
-            // Sanitize the name to remove any newlines or excessive whitespace
             const cleanName = dbName.replace(/\s+/g, ' ').trim();
-            
-            // Add a check to ensure we don't have empty names
             if (cleanName) {
+                // THE FIX IS HERE: Make the value unique
                 fields.push({
                     name: cleanName,
-                    value: '✅ Found',
+                    value: `✅ Result #${resultCount + 1}`,
                     inline: true
                 });
                 resultCount++;
@@ -136,10 +133,8 @@ breachSections.each((i, section) => {
         }
     } catch (fieldError) {
         console.error(`Error processing field ${i}:`, fieldError);
-        // Continue to the next field
     }
 });
-
 console.log(`Successfully built ${resultCount} fields.`);
 
 if (resultCount === 0) {
