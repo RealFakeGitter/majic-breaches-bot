@@ -44,6 +44,8 @@ const api = new API({
     }
 });
 
+let isProcessing = false; // Add this line
+
 // Connect to the WebSocket using the 'ws' library with a different auth method
 const ws = new WebSocket('wss://events.stoat.chat?token=' + BOT_TOKEN);
 
@@ -52,8 +54,16 @@ ws.on('open', () => {
     console.log('WebSocket connection opened. Bot is now online.');
 });
 
-ws.on('message', async (data) => {
+
+        ws.on('message', async (data) => {
     try {
+        // Add this check to prevent duplicate processing
+        if (isProcessing) {
+            console.log('Duplicate message detected, ignoring...');
+            return;
+        }
+        isProcessing = true; // Set the flag
+
         const event = JSON.parse(data.toString());
 
         // We only care about Message events
@@ -144,37 +154,41 @@ const fields = [];
 let resultCount = 0;
 
 // Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
-// --- THIS IS THE NEW, SIMPLER BLOCK ---
+// --- NEW BLOCK: Scrape table data ---
+const resultLines = [];
 breachSections.each((i, section) => {
     if (resultCount >= 10) return false;
     try {
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
         if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+
         if (dbName) {
             const cleanName = dbName.replace(/\s+/g, ' ').trim();
             if (cleanName) {
-                // ABSOLUTE MINIMUM
-                fields.push({
-                    name: cleanName,
-                    value: 'Found'
-                });
+                // Find the first data row in the table
+                const firstRow = $(section).find('tbody tr').first();
+                const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
+
+                let line = `**${cleanName}**`;
+                if (rowData) {
+                    line += `\n\`${rowData.substring(0, 150)}\``; // Add sample data, limit length
+                }
+                resultLines.push(line);
                 resultCount++;
             }
         }
     } catch (fieldError) {
         console.error(`Error processing field ${i}:`, fieldError);
     }
-});
-console.log(`Successfully built ${resultCount} fields.`);
+});console.log(`Successfully built ${resultCount} fields.`);
 
 if (resultCount === 0) {
     embed.description = `No results found for \`${query}\`.`;
     embed.colour = '#FF0000';
 } else {
-    // --- NEW WORKAROUND: Put results in the description ---
-    let resultLines = fields.map(f => `**${f.name}**`).join('\n');
-    embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines}`;
+    // --- WORKAROUND: Put the detailed results in the description ---
+    embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines.join('\n\n')}`;
     // We are NOT sending the 'fields' array at all
 }
 // --- Send the Final Message ---
@@ -206,9 +220,11 @@ await api.post(`/channels/${message.channel}/messages`, { content: 'An error occ
             }
         }
 
-    } catch (err) {
+    }     } catch (err) {
         console.error('!!! WEBSOCKET MESSAGE ERROR !!!');
         console.error(err);
+    } finally {
+        isProcessing = false; // Reset the flag
     }
 });
 
