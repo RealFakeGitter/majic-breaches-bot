@@ -77,7 +77,13 @@ ws.on('open', () => {
     // --- TOP LEVEL TRY/CATCH TO PREVENT CRASHES ---
     try {
         const event = JSON.parse(data.toString());
-        const messageId = event._id || `${event.channel}-${event.author.id}-${Date.now()}`;
+        // Safely generate a unique ID for the event to prevent duplicates
+let messageId;
+if (event.type === 'Message' && event.author && event.channel) {
+    messageId = `${event.channel}-${event.author.id}-${event.content?.substring(0, 20) || 'no-content'}`;
+} else {
+    messageId = event._id || `event-${event.type}-${Date.now()}`;
+}
 
         // Add this check to prevent duplicate processing
         if (isProcessing) {
@@ -277,3 +283,4 @@ if (breachSections.length === 0) {
         isProcessing = false;
     }
 });
+  
