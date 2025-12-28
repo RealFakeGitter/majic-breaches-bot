@@ -97,16 +97,14 @@ const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-            // --- Format and Send the Response ---
-            const embed = {
-                title: 'Majic Breaches Search Results',
-                description: `Results for: \`${query}\``,
-                colour: '#00bfff'
-            };
+           // --- Format and Send the Response ---
+const embed = {
+    title: 'Majic Breaches Search Results',
+    colour: '#00bfff'
+};
+const $ = cheerio.load(resultsHtml);
 
-            const $ = cheerio.load(resultsHtml);
-            
-            // --- TRY MULTIPLE SELECTORS ---
+// --- TRY MULTIPLE SELECTORS ---
 console.log('Attempting to parse results...');
 let breachSections = $('.breach-section'); // Original selector
 console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
@@ -131,18 +129,25 @@ if (breachSections.length === 0) {
     console.log(`Selector '.p-4.mb-4.rounded.border' found: ${breachSections.length} elements.`);
 }
 console.log(`Final count of potential result sections: ${breachSections.length}.`);
-                       let resultCount = 0;
-            // NEW CODE - MUCH SMALLER
-// NEW CODE - DRASTICALLY SMALLER
+
 const fields = [];
+let resultCount = 0;
+
 try {
     breachSections.each((i, section) => {
-        if (resultCount >= 10) return false; // *** DRASTICALLY REDUCED LIMIT ***
+        if (resultCount >= 10) return false; // Limit to 10 results
+
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
         if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+
         if (dbName) {
-            fields.push({ name: `🔓 ${dbName}`, value: `Found in database.`, inline: false });
+            // *** SIMPLIFIED FIELD ***
+            fields.push({
+                name: dbName,
+                value: '✅ Found',
+                inline: true
+            });
             resultCount++;
         }
     });
@@ -151,22 +156,23 @@ try {
     console.error(embedError);
     console.log('A single bad result was skipped to prevent a crash.');
 }
-            if (resultCount === 0) {
-                embed.description = `No results found for \`${query}\`. The website may have changed.`;
-                embed.colour = '#FF0000';
-            } else {
-                embed.fields = fields;
-            }
 
-                      // --- Send the Final Message (Simple Test Version) ---
+if (resultCount === 0) {
+    embed.description = `No results found for \`${query}\`.`;
+    embed.colour = '#FF0000';
+} else {
+    embed.description = `Found ${resultCount} results for: \`${query}\``;
+    embed.fields = fields;
+}
+                     // --- Send the Final Message ---
 console.log('Preparing to send final message...');
 try {
-    const payload = { content: "Test message. If you see this, the API works." };
+    const payload = { embeds: [embed] };
     console.log('Payload being sent:', JSON.stringify(payload, null, 2));
     await api.post(`/channels/${message.channel}/messages`, payload);
-    console.log('!!! SIMPLE MESSAGE SENT SUCCESSFULLY !!!');
+    console.log('!!! EMBED SENT SUCCESSFULLY !!!');
 } catch (finalMessageError) {
-    console.error('!!! FAILED TO SEND SIMPLE MESSAGE !!!');
+    console.error('!!! FAILED TO SEND EMBED !!!');
     console.error(finalMessageError);
 }
         } catch (error) {
