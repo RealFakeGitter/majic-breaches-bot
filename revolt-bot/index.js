@@ -1,6 +1,6 @@
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
-const puppeteer = require('puppeteer'); // <-- CHANGED BACK TO puppeteer
+const { getBrowser } = require('puppeteer-browser'); // <-- CHANGED TO puppeteer-browser
 const cheerio = require('cheerio');
 const axios = require('axios');
 
@@ -56,7 +56,7 @@ ws.on('message', async (data) => {
         let browser;
         try {
             // --- Launch Puppeteer Browser ---
-            browser = await puppeteer.launch({
+            browser = await getBrowser({
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
             });
