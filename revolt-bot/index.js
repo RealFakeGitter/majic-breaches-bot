@@ -215,3 +215,15 @@ ws.on('message', async (data) => {
                         console.error(uploadError);
                     }
                 }
+            }
+
+            // Send the final message
+            await api.post(`/channels/\${message.channel}/messages`, {
+                content: resultCount > 0 ? "Here are your results." : "",
+                embeds: [embed],
+                attachments: attachments
+            });
+
+        } catch (error) {
+            console.error('!!! PUPPETEER SEARCH ERROR !!!');
+            console.error(error);
