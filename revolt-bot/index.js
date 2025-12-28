@@ -165,17 +165,23 @@ ws.on('message', async (data) => {
                 fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
                 fileContent += '==================================================\n\n';
 
-                const allBreachSections = $('.breach-section'); // This part still uses the old selector
+                // Use the same resilient selector for the file generation
+                const allBreachSections = breachSections;
                 allBreachSections.each((i, section) => {
-                    const dbName = $(section).find('h2').first().text().trim();
-                    const description = $(section).find('p').first().text().trim();
+                    let dbName = $(section).find('h2').first().text().trim();
+                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
+                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+
+                    let description = $(section).find('p').first().text().trim();
+                    if (!description) description = $(section).find('.text-sm').first().text().trim();
+                    
                     const rows = $(section).find('tbody tr');
                     
                     fileContent += `--- Database: ${dbName} ---\n`;
                     fileContent += `${description}\n\n`;
 
                     if (rows.length > 0) {
-                        const headers = \$(section).find('thead th').map((i, el) => \$(el).text().trim()).get();
+                        const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
                         fileContent += headers.join('\t') + '\n';
                         fileContent += '----------------------------------------\n';
                         
@@ -189,4 +195,23 @@ ws.on('message', async (data) => {
                     fileContent += '\n==================================================\n\n';
                 });
 
-                const buffer = Buffer.from(fileContent, 'utf-
+                const buffer = Buffer.from(fileContent, 'utf-8');
+                const fileSizeInMB = buffer.length / (1024 * 1024);
+                if (fileSizeInMB > 20) {
+                    console.log(`File is too large (${fileSizeInMB.toFixed(2)}MB), skipping attachment.`);
+                } else {
+                    const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+
+                    try {
+                        const { id } = await api.post('/attachments/upload', {
+                            files: [{
+                                filename: fileName,
+                                content: buffer.toString('base64'),
+                            }]
+                        });
+                        attachments = [id];
+                    } catch (uploadError) {
+                        console.error('!!! FILE UPLOAD ERROR !!!');
+                        console.error(uploadError);
+                    }
+                }
