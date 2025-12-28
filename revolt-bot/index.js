@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Add this logging to see what's happening
-console.log(`Attempting to start health check server on port ${PORT}...`);
+console.log(`Attempting to start health check server on port \${PORT}...`);
 
 app.get('/health', (req, res) => {
     console.log('Health check endpoint was hit.');
@@ -24,6 +24,7 @@ try {
 }
 // --- End Mini Web Server ---
 
+
 // --- In-memory storage for results ---
 const resultsStore = new Map();
 
@@ -31,19 +32,17 @@ const resultsStore = new Map();
 app.get('/results/:id', (req, res) => {
     const resultId = req.params.id;
     const resultData = resultsStore.get(resultId);
-
     if (!resultData) {
         return res.status(404).send('Results not found or have expired.');
     }
-
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="majic-results-${resultId}.txt"`);
     res.send(resultData.content);
 });
 
 
-const { API } = require('revolt-api');
-const WebSocket = require('ws');
+// --- Bot Dependencies ---
+const { Client } = require('revolt.js'); // Changed from revolt-api/ws to revolt.js
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
@@ -53,35 +52,22 @@ const axios = require('axios');
 const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
 const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
-// --- Initialize API and WebSocket ---
-const api = new API({
-    baseURL: "https://api.stoat.chat",
-    authentication: {
-        revolt: BOT_TOKEN
-    }
-});
+// --- Initialize Client ---
+const client = new Client();
 const messageLocks = new Map();
 
-// Connect to the WebSocket using the 'ws' library with a different auth method
-const ws = new WebSocket('wss://events.stoat.chat?token=' + BOT_TOKEN);
-
-// --- Event Listeners ---
-ws.on('open', () => {
-    console.log('WebSocket connection opened. Bot is now online.');
+// --- Event Listener ---
+client.on('ready', () => {
+    console.log('Client is ready and bot is now online.');
 });
 
-
-     ws.on('message', async (data) => {
+// --- Message Handler ---
+client.on('message', async (message) => {
     // --- TOP LEVEL TRY/CATCH TO PREVENT CRASHES ---
     try {
-        const event = JSON.parse(data.toString());
-
         // --- NEW: Robust Locking System ---
-        // We only care about Message events, ignore everything else immediately.
-        if (event.type !== 'Message') return;
-
         // Create a unique ID for this specific message
-        const messageId = event._id;
+        const messageId = message._id;
         if (!messageId) return; // If there's no ID, we can't track it, so ignore.
 
         // Check if this message is already being processed. If so, stop.
@@ -92,30 +78,28 @@ ws.on('open', () => {
 
         // Lock this message ID so no other instance can process it.
         messageLocks.set(messageId, true);
-        console.log(`Locking message ID: ${messageId}`);
+        console.log(`Locking message ID: \${messageId}`);
         // We will release the lock in the `finally` block.
         // --- End New Locking System ---
 
-        // Ensure the event has the basic structure of a message
-        if (!event.content || !event.author || !event.channel) return;
+        // Ensure the message has the basic structure
+        if (!message.content || !message.author || !message.channel) return;
 
         // Ignore messages from bots
-        if (event.author.bot) return;
+        if (message.author.bot) return;
 
         // Check for the command
-        if (!event.content.startsWith('!search')) return;
+        if (!message.content.startsWith('!search')) return;
 
-        // Use the 'event' object from here on, or rename it to 'message' for consistency
-        const message = event;
         const query = message.content.substring(7).trim();
 
         if (!query) {
-            return api.post(`/channels/${message.channel}/messages`, { content: 'Please provide a search term. Example: `!search email@example.com`' });
+            return message.channel.sendMessage('Please provide a search term. Example: `!search email@example.com`');
         }
 
         // Let the user know the bot is working
         console.log('Attempting to send "Searching..." message...');
-        await api.post(`/channels/\${message.channel}/messages`, { content: `Searching for \`${query}\`... This may take a moment.` })
+        await message.channel.sendMessage(`Searching for \`${query}\`... This may take a moment.`)
             .catch(e => console.error('Error sending "Searching..." message:', e));
 
         console.log(`Received search command for query: "${query}"`);
@@ -155,7 +139,7 @@ ws.on('open', () => {
             const resultsElement = await page.$('#results');
             if (!resultsElement) {
                 console.log('Could not find the #results element on the page.');
-                await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' })
+                await message.channel.sendMessage('Failed to fetch results. The website structure may have changed or no results were found.')
                     .catch(e => console.error('Error sending "Could not find #results" message:', e));
                 return;
             }
@@ -170,7 +154,7 @@ ws.on('open', () => {
             console.log('LOG: Attempting to parse results...');
             const $ = cheerio.load(resultsHtml);
             let breachSections = $('.breach-section');
-            console.log(`Found \${breachSections.length} total breaches.`);
+            console.log(`Found ${breachSections.length} total breaches.`); // Fixed template string
 
             if (breachSections.length === 0) {
                 // No results found case
@@ -180,7 +164,7 @@ ws.on('open', () => {
                     colour: '#FF0000'
                 };
                 console.log('LOG: Sending "no results" embed.');
-                await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
+                await message.channel.sendMessage({ embeds: [embed] });
             } else {
                 console.log('LOG: Building results for embed and download...');
                 const embedFields = [];
@@ -196,7 +180,7 @@ ws.on('open', () => {
                             const cleanName = dbName.replace(/\s+/g, ' ').trim();
                             if (cleanName) {
                                 // --- For the FULL download file ---
-                                allResultLines.push(`--- ${cleanName} ---`);
+                                allResultLines.push(`--- \${cleanName} ---`);
                                 $(section).find('tbody tr').each((j, row) => {
                                     const rowData = $(row).find('td').map((k, cell) => $(cell).text().trim()).get().join(' | ');
                                     if (rowData) allResultLines.push(rowData);
@@ -226,28 +210,30 @@ ws.on('open', () => {
                 resultsStore.set(resultId, { content: allResultsText });
                 setTimeout(() => resultsStore.delete(resultId), 10 * 60 * 1000); // Clean up after 10 mins
                 const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
-
-                // --- Build the final embed with fields and a button ---
+                                // --- Build the final embed with fields and a button ---
                 console.log('LOG: Building final embed object...');
                 const embed = {
                     title: 'Majic Breaches Search Results',
-                    description: `Found **\${breachSections.length}** breaches for \`${query}\`. Showing the first \${resultCount}.`,
+                    description: `Found **${breachSections.length}** breaches for \`${query}\`. Showing the first ${resultCount}.`,
                     colour: '#00bfff',
                     fields: embedFields
                 };
-                embed.fields.push({ name: '📥 Download Full List', value: `[Click here for the complete data](${downloadUrl})`, inline: false });
+                embed.fields.push({
+                    name: '📥 Download Full List',
+                    value: `[Click here for the complete data](${downloadUrl})`,
+                    inline: false
+                });
 
                 console.log('LOG: Sending final embed with download link...');
-                await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
-                console.log(`Results stored with ID: \${resultId}.
-                                Displayed ${resultCount} in embed.`);
+                await message.channel.sendMessage({ embeds: [embed] });
+                console.log(`Results stored with ID: ${resultId}. Displayed ${resultCount} in embed.`);
             }
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
             // Send a user-friendly error message
             console.log('LOG: Sending PUPPETEER ERROR message...');
-            await api.post(`/channels/${message.channel}/messages`, { content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.' })
+            await message.channel.sendMessage('An error occurred while trying to fetch results. The website may be down or the search timed out.')
                 .catch(e => console.error('Error sending "PUPPETEER ERROR" message:', e));
         } finally {
             // --- Clean Up ---
@@ -267,16 +253,12 @@ ws.on('open', () => {
     } finally {
         // This is the CRITICAL part that was missing.
         // It ensures the lock is ALWAYS released, even if an unexpected error happens.
-        // We need to get the messageId from the event object again because we're in a different scope.
-        try {
-            const event = JSON.parse(data.toString());
-            const messageId = event._id;
-            if (messageId && messageLocks.has(messageId)) {
-                messageLocks.delete(messageId);
-                console.log(`Forcefully released lock for message ID: ${messageId} in top-level finally.`);
-            }
-        } catch (e) {
-            console.error('Error in top-level finally block while trying to release lock:', e);
+        if (messageId && messageLocks.has(messageId)) {
+            messageLocks.delete(messageId);
+            console.log(`Forcefully released lock for message ID: ${messageId} in top-level finally.`);
         }
     }
 });
+
+// --- Start the Bot ---
+client.loginBot(BOT_TOKEN);
