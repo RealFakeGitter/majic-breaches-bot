@@ -172,10 +172,11 @@ if (resultCount === 0) {
     embed.description = `No results found for \`${query}\`.`;
     embed.colour = '#FF0000';
 } else {
-    embed.description = `Found ${resultCount} results for: \`${query}\``;
-    embed.fields = fields;
+    // --- NEW WORKAROUND: Put results in the description ---
+    let resultLines = fields.map(f => `**${f.name}**`).join('\n');
+    embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines}`;
+    // We are NOT sending the 'fields' array at all
 }
-
 // --- Send the Final Message ---
 console.log('Preparing to send final message...');
 try {
