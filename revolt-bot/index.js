@@ -1,26 +1,32 @@
-const { Client } = require('revolt.js');
+const { API, WebSocket } = require('revolt-api');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
-const axios = require('axios'); // Needed for file uploads
+const axios = require('axios');
 
 // --- Configuration ---
 const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
 const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
-// --- Initialize Client ---
-const client = new Client({
-    intents: ['Messages', 'MessageContent'],
-    apiURL: "https://api.stoat.chat",
-    wsURL: "wss://events.stoat.chat"
+// --- Initialize API and WebSocket ---
+const api = new API({
+    baseURL: "https://api.stoat.chat",
+    authentication: BOT_TOKEN
+});
+
+const ws = new WebSocket({
+    baseURL: "wss://events.stoat.chat",
+    authentication: BOT_TOKEN
 });
 
 // --- Event Listeners ---
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.username}!`);
+ws.on('ready', async () => {
+    console.log('WebSocket connection opened. Bot is now online.');
+    const selfUser = await api.get('/users/@me');
+    console.log(`Logged in as ${selfUser.username}!`);
     console.log('Revolt bot is ready to receive search commands.');
 });
 
-client.on('message', async message => {
+ws.on('message', async message => {
     // Ignore messages from bots
     if (message.author.bot) return;
 
@@ -29,11 +35,15 @@ client.on('message', async message => {
 
     const query = message.content.substring(7).trim();
     if (!query) {
-        return message.reply('Please provide a search term. Example: `!search email@example.com`');
+        return api.post(`/channels/${message.channel_id}/messages`, {
+            content: 'Please provide a search term. Example: `!search email@example.com`'
+        });
     }
 
     // Let the user know the bot is working
-    await message.reply(`Searching for \`${query}\`... This may take a moment.`);
+    await api.post(`/channels/${message.channel_id}/messages`, {
+        content: `Searching for \`${query}\`... This may take a moment.`
+    });
     console.log(`Received search command for query: "${query}"`);
 
     let browser;
@@ -64,14 +74,12 @@ client.on('message', async message => {
         console.log('Results found. Parsing HTML...');
 
         // --- Format and Send the Response ---
-        // Revolt uses a different embed structure
         const embed = {
             title: 'Majic Breaches Search Results',
             description: `Results for: \`${query}\``,
-            colour: '#00bfff' // Use 'colour' for Revolt
+            colour: '#00bfff'
         };
 
-        // Parser for the preview embed (max 10 results)
         const $ = cheerio.load(resultsHtml);
         const breachSections = $('.breach-section');
         let resultCount = 0;
@@ -109,6 +117,7 @@ client.on('message', async message => {
         }
 
         // --- Prepare and send the file attachment ---
+        let attachments = [];
         if (resultCount > 0) {
             let fileContent = `Majic Breaches Search Results for: ${query}\n`;
             fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
@@ -141,32 +150,29 @@ client.on('message', async message => {
             const buffer = Buffer.from(fileContent, 'utf-8');
             const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
 
-            // Revolt requires uploading the file first to get an ID
-            const { id } = await client.rest.post('/attachments/upload', {
-                files: [
-                    {
-                        filename: fileName,
-                        content: buffer.toString('base64'), // Upload as base64
-                    }
-                ]
+            // Upload the file
+            const { id } = await api.post('/attachments/upload', {
+                files: [{
+                    filename: fileName,
+                    content: buffer.toString('base64'),
+                }]
             });
-
-            // Now send the message with the embed and the attachment ID
-            await message.channel.sendMessage({
-                content: "Here are your results.",
-                embeds: [embed],
-                attachments: [id] // Use the attachment ID
-            });
-
-        } else {
-            // If no results, just send the embed
-            await message.channel.sendMessage({ embeds: [embed] });
+            attachments = [id];
         }
+
+        // Send the final message
+        await api.post(`/channels/${message.channel_id}/messages`, {
+            content: resultCount > 0 ? "Here are your results." : "",
+            embeds: [embed],
+            attachments: attachments
+        });
 
     } catch (error) {
         console.error('!!! PUPPETEER SEARCH ERROR !!!');
         console.error(error);
-        await message.reply('Failed to fetch results. The website may be down or the search timed out.');
+        await api.post(`/channels/${message.channel_id}/messages`, {
+            content: 'Failed to fetch results. The website may be down or the search timed out.'
+        });
     } finally {
         if (browser) {
             await browser.close();
@@ -175,8 +181,8 @@ client.on('message', async message => {
     }
 });
 
-// --- Login ---
-client.login(BOT_TOKEN).catch(error => {
+// --- Start the Bot ---
+ws.connect().catch(error => {
     console.error('Failed to start bot. Check your token and connection.');
     console.error(error);
     process.exit(1);
