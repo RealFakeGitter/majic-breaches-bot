@@ -9,12 +9,12 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "revolt.js": "^7.2.0",
-      "axios": "^1.6.0",
+    "revolt-api": "^2.0.0",
+      "axios": "^1.7.9",
      "cheerio": "^1.0.0-rc.12",
-    "express": "^3.18.2" ,
+    "express": "^3.21.2" ,
     "dotenv": "^16.6.1",
-    "puppeteer": "^4.0.0"
+    "puppeteer": "^4.10.4"
   },
   "engines": {
     "node": ">=18.0.0"
