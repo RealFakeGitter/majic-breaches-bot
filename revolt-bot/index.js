@@ -1,4 +1,5 @@
 const { API } = require('revolt-api');
+const WebSocket = require('ws'); // Add this
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const axios = require('axios');
@@ -10,23 +11,29 @@ const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 // --- Initialize API and WebSocket ---
 const api = new API({
     baseURL: "https://api.stoat.chat",
-    authentication: BOT_TOKEN
+    authentication: {
+        revolt: BOT_TOKEN
+    }
 });
 
-const ws = api.websocket({
-    baseURL: "wss://events.stoat.chat",
-    authentication: BOT_TOKEN
+// Connect to the WebSocket using the 'ws' library
+const ws = new WebSocket('wss://events.stoat.chat', {
+    headers: {
+        'Authorization': BOT_TOKEN
+    }
 });
 
 // --- Event Listeners ---
-ws.on('ready', async () => {
+ws.on('open', () => {
     console.log('WebSocket connection opened. Bot is now online.');
-    const selfUser = await api.get('/users/@me');
-    console.log(`Logged in as ${selfUser.username}!`);
-    console.log('Revolt bot is ready to receive search commands.');
 });
 
-ws.on('message', async message => {
+ws.on('message', async (data) => {
+    const message = JSON.parse(data.toString());
+    
+    // We only care about Message events
+    if (message.type !== 'Message') return;
+
     // Ignore messages from bots
     if (message.author.bot) return;
 
@@ -41,10 +48,10 @@ ws.on('message', async message => {
     }
 
     // Let the user know the bot is working
-    await api.post(`/channels/\${message.channel_id}/messages`, {
+    await api.post(`/channels/${message.channel_id}/messages`, {
         content: `Searching for \`${query}\`... This may take a moment.`
     });
-    console.log(`Received search command for query: "\${query}"`);
+    console.log(`Received search command for query: "${query}"`);
 
     let browser;
     try {
@@ -101,7 +108,7 @@ ws.on('message', async message => {
                     fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                 }
                 fields.push({
-                    name: `🔓 \${dbName}`,
+                    name: `🔓 ${dbName}`, // Fixed: removed incorrect backslash
                     value: fieldText.substring(0, 1024),
                     inline: false
                 });
@@ -168,9 +175,9 @@ ws.on('message', async message => {
         });
 
     } catch (error) {
-        console.error('!!! PUPPETEER SEARCH ERROR !!!');
+        console.error('!!! PUPPETEER SEARCH ERROR !!!'); // Fixed: completed this line
         console.error(error);
-        await api.post(`/channels/\${message.channel_id}/messages`, {
+        await api.post(`/channels/${message.channel_id}/messages`, {
             content: 'Failed to fetch results. The website may be down or the search timed out.'
         });
     } finally {
@@ -182,11 +189,15 @@ ws.on('message', async message => {
 });
 
 // --- Start the Bot ---
-ws.connect().catch(error => {
-    console.error('Failed to start bot. Check your token and connection.');
-    console.error(error);
-    process.exit(1);
+ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
 });
+
+ws.on('close', (code, reason) => {
+    console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+    process.exit(1); // Exit to allow a restart
+});
+
 
 // --- Simple Ping Server for Uptime Monitoring ---
 const express = require('express');
@@ -197,4 +208,6 @@ pingApp.get('/', (req, res) => {
   res.status(200).send('OK');
 });
 
-pingApp.listen(port, () =>
+pingApp.listen(port, () => {
+  console.log(`Ping server listening on port ${port}`);
+});
