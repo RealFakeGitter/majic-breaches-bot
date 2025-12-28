@@ -8,9 +8,7 @@ const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
 const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
 // --- Initialize Client ---
-const client = new Client({
-    intents: ['Messages', 'MessageContent']
-});
+const client = new Client({ intents: ['Messages', 'MessageContent'] });
 
 // --- Event Listeners ---
 client.once('ready', () => {
@@ -21,6 +19,7 @@ client.once('ready', () => {
 client.on('message', async message => {
     // Ignore messages from bots
     if (message.author.bot) return;
+
     // Check for the command
     if (!message.content.startsWith('!search')) return;
 
@@ -173,7 +172,25 @@ client.on('message', async message => {
 });
 
 // --- Login ---
-client.login(BOT_TOKEN);
+async function startBot() {
+    try {
+        // First, fetch the bot user information using the token
+        const botUser = await client.rest.fetchAuthUser();
+        console.log(`Fetched user info for: ${botUser.username}`);
+
+        // Now, open the WebSocket connection to start receiving events
+        await client.openWebSocket();
+        console.log('WebSocket connection opened. Bot is now online.');
+
+    } catch (error) {
+        console.error('Failed to start bot. Check your token and connection.');
+        console.error(error);
+        process.exit(1); // Exit if we can't log in
+    }
+}
+
+// Start the bot
+startBot();
 
 // --- Simple Ping Server for Uptime Monitoring ---
 const express = require('express');
