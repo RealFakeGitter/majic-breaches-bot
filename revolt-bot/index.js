@@ -1,3 +1,30 @@
+// --- Mini Web Server for Render Health Check ---
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Add this logging to see what's happening
+console.log(`Attempting to start health check server on port ${PORT}...`);
+
+app.get('/health', (req, res) => {
+    console.log('Health check endpoint was hit.');
+    res.status(200).send('OK');
+});
+
+// Use a try/catch for the server start itself
+try {
+    const server = app.listen(PORT, () => {
+        console.log(`✅ Health check server listening successfully on port ${PORT}`);
+    });
+    server.on('error', (err) => {
+        console.error('❌ Failed to start health check server:', err);
+    });
+} catch (err) {
+    console.error('❌ Critical error starting server:', err);
+}
+// --- End Mini Web Server ---
+
+
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
 const puppeteer = require('puppeteer-core');
@@ -60,13 +87,18 @@ await api.post(`/channels/${message.channel}/messages`, { content: `Searching fo
 
         let browser;
         try {
-            // --- Launch Puppeteer Browser ---
-            browser = await puppeteer.launch({
-                executablePath: await chromium.executablePath(),
-                args: chromium.args,
-                headless: chromium.headless,
-            });
-
+           // --- Launch Puppeteer Browser ---
+browser = await puppeteer.launch({
+    executablePath: await chromium.executablePath(),
+    args: [
+        ...chromium.args,
+        '--no-sandbox', // Add this
+        '--disable-setuid-sandbox', // Add this
+        '--disable-dev-shm-usage', // Critical for memory issues on Linux
+        '--disable-gpu' // We don't need a GPU
+    ],
+    headless: chromium.headless,
+});
             const page = await browser.newPage();
             await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
 
@@ -112,9 +144,9 @@ const fields = [];
 let resultCount = 0;
 
 // Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
-// --- THIS IS THE NEW BLOCK ---
+// --- THIS IS THE NEW, SIMPLER BLOCK ---
 breachSections.each((i, section) => {
-    if (resultCount >= 10) return false; // Limit to 10 results
+    if (resultCount >= 10) return false;
     try {
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
@@ -122,11 +154,10 @@ breachSections.each((i, section) => {
         if (dbName) {
             const cleanName = dbName.replace(/\s+/g, ' ').trim();
             if (cleanName) {
-                // THE FIX IS HERE: Make the value unique
+                // ABSOLUTE MINIMUM
                 fields.push({
                     name: cleanName,
-                    value: `✅ Result #${resultCount + 1}`,
-                    inline: true
+                    value: 'Found'
                 });
                 resultCount++;
             }
