@@ -151,12 +151,15 @@ try {
             const attachments = []; // Always empty until the file upload is fixed.
             console.log('Skipping file upload due to known API issues.');
 
-            // Send the final message
-            await api.post(`/channels/${message.channel}/messages`, {
-                content: resultCount > 0 ? "Here are your results." : "",
-                embeds: [embed],
-                attachments: attachments
-            });
+           // Send the final message
+console.log('Preparing to send final message...');
+await api.post(`/channels/${message.channel}/messages`, { content: resultCount > 0 ? "Here are your results." : "", embeds: [embed], attachments: attachments })
+    .catch(finalMessageError => {
+        console.error('!!! FAILED TO SEND FINAL MESSAGE !!!');
+        console.error('This is the real error. The API call to send the message failed.');
+        console.error(finalMessageError);
+    });
+console.log('Final message API call has finished (either succeeded or failed).');
 
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
