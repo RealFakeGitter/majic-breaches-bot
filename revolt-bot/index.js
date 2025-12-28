@@ -79,6 +79,15 @@ ws.on('message', async (data) => {
             await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
 
             // --- Scrape the Results ---
+            const resultsElement = await page.$('#results'); // Check if the element exists first
+            if (!resultsElement) {
+                console.log('Could not find the #results element on the page.');
+                await api.post(`/channels/${message.channel}/messages`, {
+                    content: 'Failed to fetch results. The website structure may have changed or no results were found.'
+                });
+                return; // Stop processing this command
+            }
+
             const resultsHtml = await page.$eval('#results', el => el.innerHTML);
             console.log('Results found. Parsing HTML...');
 
@@ -110,7 +119,7 @@ ws.on('message', async (data) => {
                         fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
                     }
                     fields.push({
-                        name: `🔓 ${dbName}`,
+                        name: `🔓 \${dbName}`,
                         value: fieldText.substring(0, 1024),
                         inline: false
                     });
@@ -156,7 +165,7 @@ ws.on('message', async (data) => {
                     fileContent += '\n==================================================\n\n';
                 });
 
-                // --- NEW: Check file size before uploading ---
+                // --- Check file size before uploading ---
                 const buffer = Buffer.from(fileContent, 'utf-8');
                 const fileSizeInMB = buffer.length / (1024 * 1024);
                 if (fileSizeInMB > 20) { // Check if file is larger than 20MB
@@ -165,14 +174,21 @@ ws.on('message', async (data) => {
                 } else {
                     const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
 
-                    // Upload the file
-                    const { id } = await api.post('/attachments/upload', {
-                        files: [{
-                            filename: fileName,
-                            content: buffer.toString('base64'),
-                        }]
-                    });
-                    attachments = [id];
+                    // --- NEW: Upload the file inside its own try/catch ---
+                    try {
+                        const { id } = await api.post('/attachments/upload', {
+                            files: [{
+                                filename: fileName,
+                                content: buffer.toString('base64'),
+                            }]
+                        });
+                        attachments = [id];
+                    } catch (uploadError) {
+                        console.error('!!! FILE UPLOAD ERROR !!!');
+                        console.error(uploadError);
+                        // If the upload fails, we just won't attach the file.
+                        // The bot will continue and send the embed without it.
+                    }
                 }
             }
 
@@ -221,8 +237,4 @@ const port = process.env.PORT || 3000;
 
 pingApp.get('/', (req, res) => {
   res.status(200).send('OK');
-});
-
-pingApp.listen(port, () => {
-  console.log(`Ping server listening on port ${port}`);
 });
