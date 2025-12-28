@@ -29,9 +29,6 @@ ws.on('message', async (data) => {
     try {
         const message = JSON.parse(data.toString());
 
-        // --- DEBUGGING LOG ---
-        console.log('Received message from server:', message);
-
         // We only care about Message events
         if (message.type !== 'Message') return;
 
@@ -79,21 +76,19 @@ ws.on('message', async (data) => {
             await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
 
             // --- Scrape the Results ---
-            const resultsElement = await page.$('#results'); // Check if the element exists first
+            const resultsElement = await page.$('#results');
             if (!resultsElement) {
                 console.log('Could not find the #results element on the page.');
                 await api.post(`/channels/${message.channel}/messages`, {
                     content: 'Failed to fetch results. The website structure may have changed or no results were found.'
                 });
-                return; // Stop processing this command
+                return;
             }
 
             const resultsHtml = await page.$eval('#results', el => el.innerHTML);
-            console.log('Results found. Parsing HTML...');
-
-            // --- DEBUG: Take a screenshot to see what the bot sees ---
-            await page.screenshot({ path: 'debug_screenshot.png' });
-            console.log('Screenshot saved as debug_screenshot.png');
+            console.log('--- START OF RESULTS HTML ---');
+            console.log(resultsHtml);
+            console.log('--- END OF RESULTS HTML ---');
 
             // --- Format and Send the Response ---
             const embed = {
@@ -103,18 +98,43 @@ ws.on('message', async (data) => {
             };
 
             const $ = cheerio.load(resultsHtml);
-            const breachSections = $('.breach-section');
+            
+            // --- TRY MULTIPLE SELECTORS ---
+            let breachSections = $('.breach-section'); // Original selector
+            if (breachSections.length === 0) {
+                console.log('Original selector .breach-section failed, trying alternatives...');
+                breachSections = $('.card'); // Common alternative
+            }
+            if (breachSections.length === 0) {
+                breachSections = $('.result'); // Another common alternative
+            }
+            if (breachSections.length === 0) {
+                breachSections = $('.panel'); // Another common alternative
+            }
+            if (breachSections.length === 0) {
+                breachSections = $('.p-4.mb-4.rounded.border'); // A common Tailwind class pattern
+            }
+            
+            console.log(`Found \${breachSections.length} potential result sections.`);
+
             let resultCount = 0;
             const fields = [];
 
             breachSections.each((i, section) => {
                 if (resultCount >= 10) return false;
 
-                const dbName = $(section).find('h2').first().text().trim();
-                const description = $(section).find('p').first().text().trim();
+                // Try multiple selectors for the database name
+                let dbName = $(section).find('h2').first().text().trim();
+                if (!dbName) dbName = $(section).find('h3').first().text().trim();
+                if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+
+                // Try multiple selectors for the description
+                let description = $(section).find('p').first().text().trim();
+                if (!description) description = $(section).find('.text-sm').first().text().trim();
+
                 const firstRow = $(section).find('tbody tr').first();
 
-                if (dbName && firstRow.length) {
+                if (dbName && description) { // Changed condition to be more flexible
                     const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
                     const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
                     
@@ -132,7 +152,7 @@ ws.on('message', async (data) => {
             });
 
             if (resultCount === 0) {
-                embed.description = `No results found for \`${query}\`.`;
+                embed.description = `No results found for \`${query}\`. The website may have changed.`;
                 embed.colour = '#FF0000';
             } else {
                 embed.fields = fields;
@@ -145,7 +165,7 @@ ws.on('message', async (data) => {
                 fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
                 fileContent += '==================================================\n\n';
 
-                const allBreachSections = $('.breach-section');
+                const allBreachSections = $('.breach-section'); // This part still uses the old selector
                 allBreachSections.each((i, section) => {
                     const dbName = $(section).find('h2').first().text().trim();
                     const description = $(section).find('p').first().text().trim();
@@ -155,7 +175,7 @@ ws.on('message', async (data) => {
                     fileContent += `${description}\n\n`;
 
                     if (rows.length > 0) {
-                        const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
+                        const headers = \$(section).find('thead th').map((i, el) => \$(el).text().trim()).get();
                         fileContent += headers.join('\t') + '\n';
                         fileContent += '----------------------------------------\n';
                         
@@ -169,73 +189,4 @@ ws.on('message', async (data) => {
                     fileContent += '\n==================================================\n\n';
                 });
 
-                // --- Check file size before uploading ---
-                const buffer = Buffer.from(fileContent, 'utf-8');
-                const fileSizeInMB = buffer.length / (1024 * 1024);
-                if (fileSizeInMB > 20) { // Check if file is larger than 20MB
-                    console.log(`File is too large (${fileSizeInMB.toFixed(2)}MB), skipping attachment.`);
-                    // Don't create an attachment, just send the embed.
-                } else {
-                    const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
-
-                    // --- Upload the file inside its own try/catch ---
-                    try {
-                        const { id } = await api.post('/attachments/upload', {
-                            files: [{
-                                filename: fileName,
-                                content: buffer.toString('base64'),
-                            }]
-                        });
-                        attachments = [id];
-                    } catch (uploadError) {
-                        console.error('!!! FILE UPLOAD ERROR !!!');
-                        console.error(uploadError);
-                        // If the upload fails, we just won't attach the file.
-                        // The bot will continue and send the embed without it.
-                    }
-                }
-            }
-
-            // Send the final message
-            await api.post(`/channels/${message.channel}/messages`, {
-                content: resultCount > 0 ? "Here are your results." : "",
-                embeds: [embed],
-                attachments: attachments
-            });
-
-        } catch (error) {
-            console.error('!!! PUPPETEER SEARCH ERROR !!!');
-            console.error(error);
-            // Only send a failure message if it was a real scraping error, not an upload error
-            if (!error.message.includes('FILE UPLOAD ERROR')) {
-                 await api.post(`/channels/${message.channel}/messages`, {
-                    content: 'Failed to fetch results. The website may be down or the search timed out.'
-                });
-            }
-        } finally {
-            if (browser) {
-                await browser.close();
-                console.log('Browser closed.');
-            }
-        }
-
-    } catch (error) {
-        // This outer catch block will prevent the bot from crashing on any error
-        console.error('!!! UNHANDLED WEBSOCKET MESSAGE ERROR !!!');
-        // --- BETTER ERROR LOGGING ---
-        console.error(JSON.stringify(error, null, 2));
-    }
-});
-
-// --- Start the Bot ---
-ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
-});
-
-ws.on('close', (code, reason) => {
-    console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
-    process.exit(1); // Exit to allow a restart
-});
-
-// --- Simple Ping Server for Uptime Monitoring ---
-const express = require
+                const buffer = Buffer.from(fileContent, 'utf-
