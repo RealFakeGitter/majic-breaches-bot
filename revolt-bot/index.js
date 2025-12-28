@@ -126,16 +126,15 @@ if (breachSections.length === 0) {
 console.log(`Final count of potential result sections: ${breachSections.length}.`);
                        let resultCount = 0;
             // NEW CODE - MUCH SMALLER
+// NEW CODE - DRASTICALLY SMALLER
 const fields = [];
 try {
     breachSections.each((i, section) => {
-        if (resultCount >= 25) return false; // Increased limit since we're using less data per result
+        if (resultCount >= 10) return false; // *** DRASTICALLY REDUCED LIMIT ***
         let dbName = $(section).find('h2').first().text().trim();
         if (!dbName) dbName = $(section).find('h3').first().text().trim();
         if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-
         if (dbName) {
-            // Only add the database name. This is tiny and will never hit the limit.
             fields.push({ name: `🔓 ${dbName}`, value: `Found in database.`, inline: false });
             resultCount++;
         }
