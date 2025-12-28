@@ -16,12 +16,9 @@ const api = new API({
     }
 });
 
-// Connect to the WebSocket using the 'ws' library
-const ws = new WebSocket('wss://events.stoat.chat', {
-    headers: {
-        'Authorization': BOT_TOKEN
-    }
-});
+
+// Connect to the WebSocket using the 'ws' library with a different auth method
+const ws = new WebSocket('wss://events.stoat.chat?token=' + BOT_TOKEN);
 
 // --- Event Listeners ---
 ws.on('open', () => {
@@ -30,10 +27,12 @@ ws.on('open', () => {
 
 ws.on('message', async (data) => {
     const message = JSON.parse(data.toString());
-    
+
+    // --- ADD THIS LINE FOR DEBUGGING ---
+    console.log('Received message from server:', message);
+
     // We only care about Message events
     if (message.type !== 'Message') return;
-
     // Ignore messages from bots
     if (message.author.bot) return;
 
