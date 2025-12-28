@@ -1,8 +1,34 @@
+const { API } = require('revolt-api');
+const WebSocket = require('ws');
+const puppeteer = require('puppeteer');
+const cheerio = require('cheerio');
+const axios = require('axios');
+
+// --- Configuration ---
+const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
+const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
+
+// --- Initialize API and WebSocket ---
+const api = new API({
+    baseURL: "https://api.stoat.chat",
+    authentication: {
+        revolt: BOT_TOKEN
+    }
+});
+
+// Connect to the WebSocket using the 'ws' library with a different auth method
+const ws = new WebSocket('wss://events.stoat.chat?token=' + BOT_TOKEN);
+
+// --- Event Listeners ---
+ws.on('open', () => {
+    console.log('WebSocket connection opened. Bot is now online.');
+});
+
 ws.on('message', async (data) => {
     try {
         const message = JSON.parse(data.toString());
 
-        // --- ADD THIS LINE FOR DEBUGGING ---
+        // --- DEBUGGING LOG ---
         console.log('Received message from server:', message);
 
         // We only care about Message events
@@ -167,4 +193,27 @@ ws.on('message', async (data) => {
         // --- BETTER ERROR LOGGING ---
         console.error(JSON.stringify(error, null, 2));
     }
+});
+
+// --- Start the Bot ---
+ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+});
+
+ws.on('close', (code, reason) => {
+    console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+    process.exit(1); // Exit to allow a restart
+});
+
+// --- Simple Ping Server for Uptime Monitoring ---
+const express = require('express');
+const pingApp = express();
+const port = process.env.PORT || 3000;
+
+pingApp.get('/', (req, res) => {
+  res.status(200).send('OK');
+});
+
+pingApp.listen(port, () => {
+  console.log(`Ping server listening on port ${port}`);
 });
