@@ -42,13 +42,13 @@ ws.on('message', async (data) => {
 
         const query = message.content.substring(7).trim();
         if (!query) {
-            return api.post(`/channels/${message.channel_id}/messages`, {
+            return api.post(`/channels/${message.channel}/messages`, {
                 content: 'Please provide a search term. Example: `!search email@example.com`'
             });
         }
 
         // Let the user know the bot is working
-        await api.post(`/channels/${message.channel_id}/messages`, {
+        await api.post(`/channels/${message.channel}/messages`, {
             content: `Searching for \`${query}\`... This may take a moment.`
         });
         console.log(`Received search command for query: "${query}"`);
@@ -168,7 +168,7 @@ ws.on('message', async (data) => {
             }
 
             // Send the final message
-            await api.post(`/channels/${message.channel_id}/messages`, {
+            await api.post(`/channels/${message.channel}/messages`, {
                 content: resultCount > 0 ? "Here are your results." : "",
                 embeds: [embed],
                 attachments: attachments
@@ -177,7 +177,7 @@ ws.on('message', async (data) => {
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
-            await api.post(`/channels/${message.channel_id}/messages`, {
+            await api.post(`/channels/${message.channel}/messages`, {
                 content: 'Failed to fetch results. The website may be down or the search timed out.'
             });
         } finally {
