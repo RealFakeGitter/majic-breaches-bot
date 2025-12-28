@@ -55,7 +55,8 @@ ws.on('open', () => {
 });
 
 
-        ws.on('message', async (data) => {
+       ws.on('message', async (data) => {
+    // --- TOP LEVEL TRY/CATCH TO PREVENT CRASHES ---
     try {
         // Add this check to prevent duplicate processing
         if (isProcessing) {
@@ -80,35 +81,34 @@ ws.on('open', () => {
 
         // Use the 'event' object from here on, or rename it to 'message' for consistency
         const message = event;
-
         const query = message.content.substring(7).trim();
+
         if (!query) {
-            return api.post(`/channels/${message.channel}/messages`, {
-                content: 'Please provide a search term. Example: `!search email@example.com`'
-            });
+            return api.post(`/channels/${message.channel}/messages`, { content: 'Please provide a search term. Example: `!search email@example.com`' });
         }
 
         // Let the user know the bot is working
-      // Let the user know the bot is working
-console.log('Attempting to send "Searching..." message...');
-await api.post(`/channels/${message.channel}/messages`, { content: `Searching for \`${query}\`... This may take a moment.` })
-    .catch(e => console.error('Error sending "Searching..." message:', e));
+        console.log('Attempting to send "Searching..." message...');
+        await api.post(`/channels/${message.channel}/messages`, { content: `Searching for \`${query}\`... This may take a moment.` })
+            .catch(e => console.error('Error sending "Searching..." message:', e));
+
         console.log(`Received search command for query: "${query}"`);
 
         let browser;
         try {
-           // --- Launch Puppeteer Browser ---
-browser = await puppeteer.launch({
-    executablePath: await chromium.executablePath(),
-    args: [
-        ...chromium.args,
-        '--no-sandbox', // Add this
-        '--disable-setuid-sandbox', // Add this
-        '--disable-dev-shm-usage', // Critical for memory issues on Linux
-        '--disable-gpu' // We don't need a GPU
-    ],
-    headless: chromium.headless,
-});
+            // --- Launch Puppeteer Browser ---
+            browser = await puppeteer.launch({
+                executablePath: await chromium.executablePath(),
+                args: [
+                    ...chromium.args,
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu'
+                ],
+                headless: chromium.headless,
+            });
+
             const page = await browser.newPage();
             await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
 
@@ -120,98 +120,97 @@ browser = await puppeteer.launch({
             await page.keyboard.press('Enter');
 
             console.log('Search submitted, waiting for results...');
-
             await page.waitForSelector('#results', { timeout: 15000 });
             await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to populate
 
             // --- Scrape the Results ---
-const resultsElement = await page.$('#results');
-if (!resultsElement) {
-    console.log('Could not find the #results element on the page.');
-   console.log('Attempting to send "Could not find #results" message...');
-await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' })
-    .catch(e => console.error('Error sending "Could not find #results" message:', e));
-    return;
-}
-// Safely get the HTML of the results element
-const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
+            const resultsElement = await page.$('#results');
+            if (!resultsElement) {
+                console.log('Could not find the #results element on the page.');
+                console.log('Attempting to send "Could not find #results" message...');
+                await api.post(`/channels/${message.channel}/messages`, { content: 'Failed to fetch results. The website structure may have changed or no results were found.' })
+                    .catch(e => console.error('Error sending "Could not find #results" message:', e));
+                return;
+            }
+
+            // Safely get the HTML of the results element
+            const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
+
             console.log('--- START OF RESULTS HTML ---');
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-          // --- Format and Send the Response ---
-const embed = {
-    title: 'Majic Breaches Search Results',
-    colour: '#00bfff'
-};
-const $ = cheerio.load(resultsHtml);
+            // --- Format and Send the Response ---
+            const embed = {
+                title: 'Majic Breaches Search Results',
+                colour: '#00bfff'
+            };
+            const $ = cheerio.load(resultsHtml);
+            console.log('Attempting to parse results...');
+            let breachSections = $('.breach-section');
+            console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
 
-console.log('Attempting to parse results...');
-let breachSections = $('.breach-section');
-console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
+            const resultLines = [];
+            let resultCount = 0;
 
-const fields = [];
-let resultCount = 0;
+            // --- NEW BLOCK: Scrape table data ---
+            breachSections.each((i, section) => {
+                if (resultCount >= 10) return false;
+                try {
+                    let dbName = $(section).find('h2').first().text().trim();
+                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
+                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
 
-// Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
-// --- NEW BLOCK: Scrape table data ---
-const resultLines = [];
-breachSections.each((i, section) => {
-    if (resultCount >= 10) return false;
-    try {
-        let dbName = $(section).find('h2').first().text().trim();
-        if (!dbName) dbName = $(section).find('h3').first().text().trim();
-        if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+                    if (dbName) {
+                        const cleanName = dbName.replace(/\s+/g, ' ').trim();
+                        if (cleanName) {
+                            // Find the first data row in the table
+                            const firstRow = $(section).find('tbody tr').first();
+                            const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
 
-        if (dbName) {
-            const cleanName = dbName.replace(/\s+/g, ' ').trim();
-            if (cleanName) {
-                // Find the first data row in the table
-                const firstRow = $(section).find('tbody tr').first();
-                const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
-
-                let line = `**${cleanName}**`;
-                if (rowData) {
-                    line += `\n\`${rowData.substring(0, 150)}\``; // Add sample data, limit length
+                            let line = `**${cleanName}**`;
+                            if (rowData) {
+                                line += `\n\`${rowData.substring(0, 150)}\``; // Add sample data, limit length
+                            }
+                            resultLines.push(line);
+                            resultCount++;
+                        }
+                    }
+                } catch (fieldError) {
+                    console.error(`Error processing field ${i}:`, fieldError);
                 }
-                resultLines.push(line);
-                resultCount++;
-            }
-        }
-    } catch (fieldError) {
-        console.error(`Error processing field ${i}:`, fieldError);
-    }
-});console.log(`Successfully built ${resultCount} fields.`);
+            });
 
-if (resultCount === 0) {
-    embed.description = `No results found for \`${query}\`.`;
-    embed.colour = '#FF0000';
-} else {
-    // --- WORKAROUND: Put the detailed results in the description ---
-    embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines.join('\n\n')}`;
-    // We are NOT sending the 'fields' array at all
-}
-// --- Send the Final Message ---
-console.log('Preparing to send final message...');
-try {
-    const payload = { embeds: [embed] };
-    // Log the FINAL payload just before it's sent
-    console.log('Payload being sent:', JSON.stringify(payload, null, 2));
-    await api.post(`/channels/${message.channel}/messages`, payload);
-    console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
-} catch (finalMessageError) {
-    console.error('!!! FAILED TO SEND EMBED !!!');
-    console.error(finalMessageError.response?.data || finalMessageError); // Log the error response from Revolt if available
-}
+            console.log(`Successfully built ${resultCount} fields.`);
+
+            if (resultCount === 0) {
+                embed.description = `No results found for \`${query}\`.`;
+                embed.colour = '#FF0000';
+            } else {
+                // --- WORKAROUND: Put the detailed results in the description ---
+                embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines.join('\n\n')}`;
+            }
+
+            // --- Send the Final Message ---
+            console.log('Preparing to send final message...');
+            try {
+                const payload = { embeds: [embed] };
+                // Log the FINAL payload just before it's sent
+                console.log('Payload being sent:', JSON.stringify(payload, null, 2));
+                await api.post(`/channels/${message.channel}/messages`, payload);
+                console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
+            } catch (finalMessageError) {
+                console.error('!!! FAILED TO SEND EMBED !!!');
+                console.error(finalMessageError.response?.data || finalMessageError);
+            }
+
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
             // Send a user-friendly error message
-            // Send a user-friendly error message
-console.log('Attempting to send "PUPPETEER ERROR" message...');
-await api.post(`/channels/${message.channel}/messages`, { content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.' })
-    .catch(e => console.error('Error sending "PUPPETEER ERROR" message:', e));
-
+            console.log('Attempting to send "PUPPETEER ERROR" message...');
+            await api.post(`/channels/${message.channel}/messages`, { content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.' })
+                .catch(e => console.error('Error sending "PUPPETEER ERROR" message:', e));
         } finally {
             // --- Clean Up ---
             if (browser) {
@@ -220,19 +219,12 @@ await api.post(`/channels/${message.channel}/messages`, { content: 'An error occ
             }
         }
 
-    }      catch (err) {
-        console.error('!!! WEBSOCKET MESSAGE ERROR !!!');
+    } catch (err) {
+        // THIS IS THE NEW, CRITICAL PART
+        console.error('!!! UNHANDLED WEBSOCKET MESSAGE ERROR !!!');
         console.error(err);
     } finally {
-        isProcessing = false; // Reset the flag
+        // ALWAYS reset the flag
+        isProcessing = false;
     }
-});
-
-ws.on('error', (err) => {
-    console.error('!!! WEBSOCKET ERROR !!!');
-    console.error(err);
-});
-
-ws.on('close', (code, reason) => {
-    console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
 });
