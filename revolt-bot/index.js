@@ -1,6 +1,6 @@
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core'); // <-- CHANGED TO puppeteer-core
 const cheerio = require('cheerio');
 const axios = require('axios');
 
@@ -57,8 +57,9 @@ ws.on('message', async (data) => {
         try {
             // --- Launch Puppeteer Browser ---
             browser = await puppeteer.launch({
+                executablePath: '/usr/bin/chromium', // <-- ADDED EXECUTABLE PATH
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] // <-- ADDED EXTRA ARG
             });
 
             const page = await browser.newPage();
