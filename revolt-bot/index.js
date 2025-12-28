@@ -158,59 +158,17 @@ try {
                 embed.fields = fields;
             }
 
-                        // --- File Upload Section ---
-            // File upload is currently failing on Revolt's end (502 Bad Gateway).
-            // We will skip the upload to ensure the main results are still delivered.
-            const attachments = []; // Always empty until the file upload is fixed.
-            console.log('Skipping file upload due to known API issues.');
-
-         // Send the final message
+                      // --- Send the Final Message (Simple Test Version) ---
 console.log('Preparing to send final message...');
 try {
-   // Let's build a more complex, but still safe, embed
-const embed = {
-    title: "Search Results",
-    description: `Found ${resultCount} potential breaches for "${query}".`,
-    color: 5814783, // A nice blue color
-    fields: []
-};
-
-// Let's add a single field with data from the first breach
-if (breachSections.length > 0) {
-    const firstBreach = breachSections[0];
-    const breachTitle = firstBreach.querySelector('h2')?.textContent || 'Unknown Breach';
-    
-    // Get the first row of data from the table
-    const firstRow = firstBreach.querySelector('tbody tr');
-    let rowData = 'No data found.';
-    if (firstRow) {
-        const cells = firstRow.querySelectorAll('td');
-        // Sanitize the cell data to remove problematic characters
-        const cleanCells = Array.from(cells).map(cell => cell.textContent.trim().replace(/["`]/g, ''));
-        rowData = cleanCells.join(' | ');
-    }
-
-    embed.fields.push({
-        name: `Example from: ${breachTitle}`,
-        value: rowData,
-        inline: false
-    });
-}
-
-    const payload = {
-        content: "Here are your results.",
-        embeds: [embed]
-    };
-
+    const payload = { content: "Test message. If you see this, the API works." };
     console.log('Payload being sent:', JSON.stringify(payload, null, 2));
     await api.post(`/channels/${message.channel}/messages`, payload);
-    console.log('!!! MINIMAL EMBED SENT SUCCESSFULLY !!!');
+    console.log('!!! SIMPLE MESSAGE SENT SUCCESSFULLY !!!');
 } catch (finalMessageError) {
-    console.error('!!! FAILED TO SEND MINIMAL EMBED !!!');
+    console.error('!!! FAILED TO SEND SIMPLE MESSAGE !!!');
     console.error(finalMessageError);
 }
-console.log('Final message API call has finished (either succeeded or failed).');
-
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
