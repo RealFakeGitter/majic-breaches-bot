@@ -9,10 +9,12 @@ const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 
 // --- Initialize Client ---
 const client = new Client({
-    intents: ['Messages', 'MessageContent'],
-    apiURL: "https://api.revolt.chat",
-    wsURL: "wss://ws.revolt.chat"
+    intents: ['Messages', 'MessageContent']
 });
+
+// Use the Stoat.chat URLs
+client.api.options.baseURL = "https://api.stoat.chat";
+client.api.options.wsURL = "wss://events.stoat.chat";
 
 // --- Event Listeners ---
 client.once('ready', () => {
