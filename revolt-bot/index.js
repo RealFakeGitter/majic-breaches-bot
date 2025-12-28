@@ -158,14 +158,17 @@ try {
             const attachments = []; // Always empty until the file upload is fixed.
             console.log('Skipping file upload due to known API issues.');
 
-           // Send the final message
+          // Send the final message
 console.log('Preparing to send final message...');
-await api.post(`/channels/${message.channel}/messages`, { content: resultCount > 0 ? "Here are your results." : "", embeds: [embed], attachments: attachments })
-    .catch(finalMessageError => {
-        console.error('!!! FAILED TO SEND FINAL MESSAGE !!!');
-        console.error('This is the real error. The API call to send the message failed.');
-        console.error(finalMessageError);
-    });
+try {
+    const payload = { content: "Test message. If you see this, the API works." };
+    console.log('Payload being sent:', JSON.stringify(payload, null, 2));
+    await api.post(`/channels/${message.channel}/messages`, payload);
+    console.log('!!! SIMPLE MESSAGE SENT SUCCESSFULLY !!!');
+} catch (finalMessageError) {
+    console.error('!!! FAILED TO SEND SIMPLE MESSAGE !!!');
+    console.error(finalMessageError);
+}
 console.log('Final message API call has finished (either succeeded or failed).');
 
         } catch (error) {
