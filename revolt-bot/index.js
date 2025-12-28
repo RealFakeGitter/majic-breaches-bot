@@ -57,10 +57,10 @@ ws.on('message', async (data) => {
         try {
             // --- Launch Puppeteer Browser ---
             browser = await puppeteer.launch({
-                executablePath: '/usr/bin/chromium', // <-- ADDED EXECUTABLE PATH
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] // <-- ADDED EXTRA ARG
-            });
+    executablePath: '/usr/bin/google-chrome-stable', // <-- NEW PATH
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+});
 
             const page = await browser.newPage();
             await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
