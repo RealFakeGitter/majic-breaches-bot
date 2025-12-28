@@ -158,86 +158,11 @@ ws.on('message', async (data) => {
                 embed.fields = fields;
             }
 
-            // --- Prepare and send the file attachment ---
-            let attachments = [];
-            if (resultCount > 0) {
-                let fileContent = `Majic Breaches Search Results for: ${query}\n`;
-                fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
-                fileContent += '==================================================\n\n';
-
-                // Use the same resilient selector for the file generation
-                const allBreachSections = breachSections;
-                allBreachSections.each((i, section) => {
-                    let dbName = $(section).find('h2').first().text().trim();
-                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
-                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-
-                    let description = $(section).find('p').first().text().trim();
-                    if (!description) description = $(section).find('.text-sm').first().text().trim();
-                    
-                    const rows = $(section).find('tbody tr');
-                    
-                    fileContent += `--- Database: ${dbName} ---\n`;
-                    fileContent += `${description}\n\n`;
-
-                    if (rows.length > 0) {
-                        const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
-                        fileContent += headers.join('\t') + '\n';
-                        fileContent += '----------------------------------------\n';
-                        
-                        rows.each((j, row) => {
-                            const rowData = $(row).find('td').map((k, el) => $(el).text().trim()).get().join('\t');
-                            fileContent += rowData + '\n';
-                        });
-                    } else {
-                        fileContent += 'No data found in this entry.\n';
-                    }
-                    fileContent += '\n==================================================\n\n';
-                });
-
-                const buffer = Buffer.from(fileContent, 'utf-8');
-                const fileSizeInMB = buffer.length / (1024 * 1024);
-                if (fileSizeInMB > 20) {
-                    console.log(`File is too large (${fileSizeInMB.toFixed(2)}MB), skipping attachment.`);
-                } else {
-                    const fileName = `majic_results_${query.replace(/[^^a-z0-9]/gi, '_').toLowerCase()}.txt`;
-
-                               try {
-                // Use FormData for multipart/form-data uploads
-                const FormData = require('form-data');
-                const form = new FormData();
-                form.append('file', buffer, fileName);
-
-                const uploadResponse = await axios.post(
-                    'https://api.stoat.chat/attachments/upload',
-                    form,
-                    {
-                        headers: {
-                            ...form.getHeaders(),
-                            'X-Bot-Token': BOT_TOKEN, // Use the correct auth header for file uploads
-                        },
-                    }
-                );
-
-                if (uploadResponse.data && uploadResponse.data.id) {
-                    attachments = [uploadResponse.data.id];
-                } else {
-                    console.error('!!! FILE UPLOAD ERROR: No ID in response !!!');
-                    console.error(uploadResponse.data);
-                }
-            } catch (uploadError) {
-                console.error('!!! FILE UPLOAD ERROR !!!');
-                // Log more details for debugging
-                if (uploadError.response) {
-                    console.error('Status:', uploadError.response.status);
-                    console.error('Headers:', uploadError.response.headers);
-                    console.error('Data:', uploadError.response.data);
-                } else {
-                    console.error(uploadError);
-                }
-            }
-                }
-            }
+                        // --- File Upload Section ---
+            // File upload is currently failing on Revolt's end (502 Bad Gateway).
+            // We will skip the upload to ensure the main results are still delivered.
+            const attachments = []; // Always empty until the file upload is fixed.
+            console.log('Skipping file upload due to known API issues.');
 
             // Send the final message
             await api.post(`/channels/${message.channel}/messages`, {
