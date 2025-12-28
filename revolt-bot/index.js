@@ -24,6 +24,23 @@ try {
 }
 // --- End Mini Web Server ---
 
+// --- In-memory storage for results ---
+const resultsStore = new Map();
+
+// --- Endpoint to serve results as a downloadable text file ---
+app.get('/results/:id', (req, res) => {
+    const resultId = req.params.id;
+    const resultData = resultsStore.get(resultId);
+
+    if (!resultData) {
+        return res.status(404).send('Results not found or have expired.');
+    }
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="majic-results-${resultId}.txt"`);
+    res.send(resultData.content);
+});
+
 
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
@@ -140,69 +157,61 @@ ws.on('open', () => {
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-            // --- Format and Send the Response ---
-            const embed = {
-                title: 'Majic Breaches Search Results',
-                colour: '#00bfff'
-            };
-            const $ = cheerio.load(resultsHtml);
-            console.log('Attempting to parse results...');
-            let breachSections = $('.breach-section');
-            console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
+           // --- NEW: Format ALL results and prepare for download link ---
+console.log('Attempting to parse ALL results...');
+const $ = cheerio.load(resultsHtml);
+let breachSections = $('.breach-section');
+console.log(`Found ${breachSections.length} total breaches.`);
 
-            const resultLines = [];
-            let resultCount = 0;
+const resultLines = [];
+breachSections.each((i, section) => {
+    try {
+        let dbName = $(section).find('h2').first().text().trim();
+        if (!dbName) dbName = $(section).find('h3').first().text().trim();
+        if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
 
-            // --- NEW BLOCK: Scrape table data ---
-            breachSections.each((i, section) => {
-                if (resultCount >= 10) return false;
-                try {
-                    let dbName = $(section).find('h2').first().text().trim();
-                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
-                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-
-                    if (dbName) {
-                        const cleanName = dbName.replace(/\s+/g, ' ').trim();
-                        if (cleanName) {
-                            // Find the first data row in the table
-                            const firstRow = $(section).find('tbody tr').first();
-                            const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
-
-                            let line = `**${cleanName}**`;
-                            if (rowData) {
-                                line += `\n\`${rowData.substring(0, 150)}\``; // Add sample data, limit length
-                            }
-                            resultLines.push(line);
-                            resultCount++;
-                        }
+        if (dbName) {
+            const cleanName = dbName.replace(/\s+/g, ' ').trim();
+            if (cleanName) {
+                resultLines.push(`--- ${cleanName} ---`);
+                // Get ALL rows from the table for this breach
+                $(section).find('tbody tr').each((j, row) => {
+                    const rowData = $(row).find('td').map((k, cell) => $(cell).text().trim()).get().join(' | ');
+                    if (rowData) {
+                        resultLines.push(rowData);
                     }
-                } catch (fieldError) {
-                    console.error(`Error processing field ${i}:`, fieldError);
-                }
-            });
-
-            console.log(`Successfully built ${resultCount} fields.`);
-
-            if (resultCount === 0) {
-                embed.description = `No results found for \`${query}\`.`;
-                embed.colour = '#FF0000';
-            } else {
-                // --- WORKAROUND: Put the detailed results in the description ---
-                embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines.join('\n\n')}`;
+                });
+                resultLines.push(''); // Add a blank line for spacing
             }
+        }
+    } catch (fieldError) {
+        console.error(`Error processing breach ${i}:`, fieldError);
+    }
+});
 
-            // --- Send the Final Message ---
-            console.log('Preparing to send final message...');
-            try {
-                const payload = { embeds: [embed] };
-                // Log the FINAL payload just before it's sent
-                console.log('Payload being sent:', JSON.stringify(payload, null, 2));
-                await api.post(`/channels/${message.channel}/messages`, payload);
-                console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
-            } catch (finalMessageError) {
-                console.error('!!! FAILED TO SEND EMBED !!!');
-                console.error(finalMessageError.response?.data || finalMessageError);
-            }
+const allResultsText = resultLines.join('\n');
+
+if (breachSections.length === 0) {
+    // No results found case
+    const embed = { title: 'Majic Breaches Search Results', description: `No results found for \`${query}\`.`, colour: '#FF0000' };
+    await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
+} else {
+    // --- Store results and send link ---
+    const resultId = require('crypto').randomBytes(8).toString('hex'); // Generate a unique ID
+    resultsStore.set(resultId, { content: allResultsText });
+
+    // Set a timer to delete the result after 10 minutes to save memory
+    setTimeout(() => resultsStore.delete(resultId), 10 * 60 * 1000);
+
+    const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
+    const embed = {
+        title: 'Majic Breaches Search Results',
+        description: `Found **${breachSections.length}** breaches for \`${query}\`. The full results are too large to display here.\n\nDownload the complete list: [**Click Here**](${downloadUrl})`,
+        colour: '#00bfff'
+    };
+    await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
+    console.log(`Results stored with ID: ${resultId}`);
+}
 
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
@@ -228,3 +237,4 @@ ws.on('open', () => {
         isProcessing = false;
     }
 });
+  
