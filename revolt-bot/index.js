@@ -61,6 +61,12 @@ client.on('ready', () => {
     console.log('Client is ready and bot is now online.');
 });
 
+// --- Master Error Handler ---
+client.on('error', (error) => {
+    console.error('!!! UNHANDLED CLIENT ERROR !!!');
+    console.error(error);
+});
+
 // --- Message Handler ---
 client.on('message', async (message) => {
     // --- TOP LEVEL TRY/CATCH TO PREVENT CRASHES ---
@@ -262,3 +268,5 @@ client.on('message', async (message) => {
 
 // --- Start the Bot ---
 client.loginBot(BOT_TOKEN);
+
+               
