@@ -27,16 +27,22 @@ ws.on('open', () => {
 
 ws.on('message', async (data) => {
     try {
-        const message = JSON.parse(data.toString());
+        const event = JSON.parse(data.toString());
 
         // We only care about Message events
-        if (message.type !== 'Message') return;
+        if (event.type !== 'Message') return;
+
+        // Ensure the event has the basic structure of a message
+        if (!event.content || !event.author || !event.channel) return;
 
         // Ignore messages from bots
-        if (message.author.bot) return;
+        if (event.author.bot) return;
 
         // Check for the command
-        if (!message.content.startsWith('!search')) return;
+        if (!event.content.startsWith('!search')) return;
+
+        // Use the 'event' object from here on, or rename it to 'message' for consistency
+        const message = event;
 
         const query = message.content.substring(7).trim();
         if (!query) {
