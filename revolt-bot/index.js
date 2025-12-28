@@ -118,35 +118,26 @@ ws.on('message', async (data) => {
             console.log(`Found ${breachSections.length} potential result sections.`);
 
                        let resultCount = 0;
-            const fields = [];
-            try {
-                breachSections.each((i, section) => {
-                    if (resultCount >= 10) return false;
-                    // Try multiple selectors for the database name
-                    let dbName = $(section).find('h2').first().text().trim();
-                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
-                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-                    // Try multiple selectors for the description
-                    let description = $(section).find('p').first().text().trim();
-                    if (!description) description = $(section).find('.text-sm').first().text().trim();
-                    const firstRow = $(section).find('tbody tr').first();
-                    if (dbName && description) { // Changed condition to be more flexible
-                        const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
-                        const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-                        let fieldText = cleanDescription;
-                        if (rowData) {
-                            fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
-                        }
-                        fields.push({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
-                        resultCount++;
-                    }
-                });
-            } catch (embedError) {
-                console.error('!!! ERROR WHILE BUILDING EMBED FIELDS !!!');
-                console.error(embedError);
-                console.log('A single bad result was skipped to prevent a crash.');
-            }
+            // NEW CODE - MUCH SMALLER
+const fields = [];
+try {
+    breachSections.each((i, section) => {
+        if (resultCount >= 25) return false; // Increased limit since we're using less data per result
+        let dbName = $(section).find('h2').first().text().trim();
+        if (!dbName) dbName = $(section).find('h3').first().text().trim();
+        if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
 
+        if (dbName) {
+            // Only add the database name. This is tiny and will never hit the limit.
+            fields.push({ name: `🔓 ${dbName}`, value: `Found in database.`, inline: false });
+            resultCount++;
+        }
+    });
+} catch (embedError) {
+    console.error('!!! ERROR WHILE BUILDING EMBED FIELDS !!!');
+    console.error(embedError);
+    console.log('A single bad result was skipped to prevent a crash.');
+}
             if (resultCount === 0) {
                 embed.description = `No results found for \`${query}\`. The website may have changed.`;
                 embed.colour = '#FF0000';
