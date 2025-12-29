@@ -24,21 +24,6 @@ try {
 }
 // --- End Mini Web Server ---
 
-// --- In-memory storage for results --- // --- NEW ---
-const resultsStore = new Map();
-
-// --- Endpoint to serve results as a downloadable text file --- // --- NEW ---
-app.get('/results/:id', (req, res) => {
-    const resultId = req.params.id;
-    const resultData = resultsStore.get(resultId);
-    if (!resultData) {
-        return res.status(404).send('Results not found or have expired.');
-    }
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="majic-results-${resultId}.txt"`);
-    res.send(resultData.content);
-});
-
 
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
@@ -154,87 +139,70 @@ const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-                     // --- NEW: Format ALL results for download and first 10 for display ---
-            const embed = { title: 'Majic Breaches Search Results', colour: '#00bfff' };
-            const $ = cheerio.load(resultsHtml);
-            console.log('Attempting to parse results...');
-            let breachSections = $('.breach-section');
-            const totalBreachCount = breachSections.length;
-            console.log(`Found ${totalBreachCount} total breaches.`);
+          // --- Format and Send the Response ---
+const embed = {
+    title: 'Majic Breaches Search Results',
+    colour: '#00bfff'
+};
+const $ = cheerio.load(resultsHtml);
 
-            // --- PART 1: Prepare ALL results for the text file ---
-            const allResultLines = [];
-            breachSections.each((i, section) => {
-                let dbName = $(section).find('h2, h3, .font-bold').first().text().trim();
-                const cleanName = dbName.replace(/\s+/g, ' ').trim();
-                if (cleanName) {
-                    allResultLines.push(`--- ${cleanName} ---`);
-                    $(section).find('tbody tr').each((j, row) => {
-                        const rowData = $(row).find('td').map((k, cell) => $(cell).text().trim()).get().join(' | ');
-                        if (rowData) allResultLines.push(rowData);
-                    });
-                    allResultLines.push(''); // Add a blank line between breaches
+console.log('Attempting to parse results...');
+let breachSections = $('.breach-section');
+console.log(`Selector '.breach-section' found: ${breachSections.length} elements.`);
+
+const fields = [];
+let resultCount = 0;
+
+// Use a try/catch inside the loop to prevent one bad result from crashing the whole thing
+// --- NEW BLOCK: Scrape table data ---
+const resultLines = [];
+breachSections.each((i, section) => {
+    if (resultCount >= 10) return false;
+    try {
+        let dbName = $(section).find('h2').first().text().trim();
+        if (!dbName) dbName = $(section).find('h3').first().text().trim();
+        if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
+
+        if (dbName) {
+            const cleanName = dbName.replace(/\s+/g, ' ').trim();
+            if (cleanName) {
+                // Find the first data row in the table
+                const firstRow = $(section).find('tbody tr').first();
+                const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
+
+                let line = `**${cleanName}**`;
+                if (rowData) {
+                    line += `\n\`${rowData.substring(0, 150)}\``; // Add sample data, limit length
                 }
-            });
-            const allResultsText = allResultLines.join('\n');
-
-            // --- PART 2: Store full results and generate download URL ---
-            const resultId = require('crypto').randomBytes(8).toString('hex');
-            resultsStore.set(resultId, { content: allResultsText });
-            setTimeout(() => resultsStore.delete(resultId), 10 * 60 * 1000); // Auto-delete after 10 minutes
-            const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
-
-            // --- PART 3: Build embed fields for display (max 10) ---
-            const fields = [];
-            let resultCount = 0;
-            breachSections.each((i, section) => {
-                if (resultCount >= 10) return false; // Stop after 10 fields
-                try {
-                    let dbName = $(section).find('h2').first().text().trim();
-                    if (!dbName) dbName = $(section).find('h3').first().text().trim();
-                    if (!dbName) dbName = $(section).find('.font-bold').first().text().trim();
-                    if (dbName) {
-                        const cleanName = dbName.replace(/\s+/g, ' ').trim();
-                        if (cleanName) {
-                            const firstRow = $(section).find('tbody tr').first();
-                            const rowData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
-                            let fieldValue = `Sample: \`${rowData.substring(0, 150)}\``;
-                            if (rowData.length < 5) fieldValue = 'No sample data available.';
-                            fields.push({ name: cleanName, value: fieldValue, inline: false });
-                            resultCount++;
-                        }
-                    }
-                } catch (fieldError) {
-                    console.error(`Error processing field ${i}:`, fieldError);
-                }
-            });
-
-            // --- PART 4: Assemble and send the final embed ---
-            if (resultCount === 0) {
-                embed.description = `No results found for \`${query}\`.`;
-                embed.colour = '#FF0000';
-            } else {
-                embed.description = `Found **${totalBreachCount}** breaches for \`${query}\`. Showing the first ${resultCount}.`;
-                embed.fields = fields; // Add the array of fields here
-                // Add the download link as the last field
-                embed.fields.push({
-                    name: '📥 Download Full List',
-                    value: `[Click here for the complete data](${downloadUrl})`,
-                    inline: false
-                });
+                resultLines.push(line);
+                resultCount++;
             }
+        }
+    } catch (fieldError) {
+        console.error(`Error processing field ${i}:`, fieldError);
+    }
+});console.log(`Successfully built ${resultCount} fields.`);
 
-            // --- Send the Final Message ---
-            console.log('Preparing to send final message...');
-            try {
-                const payload = { embeds: [embed] };
-                console.log('Payload being sent:', JSON.stringify(payload, null, 2));
-                await api.post(`/channels/${message.channel}/messages`, payload);
-                console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
-            } catch (finalMessageError) {
-                console.error('!!! FAILED TO SEND EMBED !!!');
-                console.error(finalMessageError.response?.data || finalMessageError);
-            }
+if (resultCount === 0) {
+    embed.description = `No results found for \`${query}\`.`;
+    embed.colour = '#FF0000';
+} else {
+    // --- WORKAROUND: Put the detailed results in the description ---
+    embed.description = `Found ${resultCount} results for: \`${query}\`\n\n${resultLines.join('\n\n')}`;
+    // We are NOT sending the 'fields' array at all
+}
+// --- Send the Final Message ---
+console.log('Preparing to send final message...');
+try {
+    const payload = { embeds: [embed] };
+    // Log the FINAL payload just before it's sent
+    console.log('Payload being sent:', JSON.stringify(payload, null, 2));
+    await api.post(`/channels/${message.channel}/messages`, payload);
+    console.log('!!! API CALL COMPLETED SUCCESSFULLY !!!');
+} catch (finalMessageError) {
+    console.error('!!! FAILED TO SEND EMBED !!!');
+    console.error(finalMessageError.response?.data || finalMessageError); // Log the error response from Revolt if available
+}
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
