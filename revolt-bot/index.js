@@ -220,7 +220,7 @@ await api.post(`/channels/${message.channel}/messages`, { content: 'An error occ
             }
         }
 
-    }     } catch (err) {
+    }     catch (err) {
         console.error('!!! WEBSOCKET MESSAGE ERROR !!!');
         console.error(err);
     } finally {
