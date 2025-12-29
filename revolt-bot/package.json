@@ -5,7 +5,7 @@
   "description": "Revolt bot for Majic Breaches search",
   "main": "index.js",
   "scripts": {
-    "start": "pm2-runtime start index.js --name bot",
+    "start": "pm2-runtime start index.js --name bot --silent",
     "dev": "node index.js",
     "build": "echo 'No build step required'"
   },
