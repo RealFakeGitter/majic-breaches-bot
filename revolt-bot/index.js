@@ -71,42 +71,54 @@ client.on('error', (error) => {
 });
 
 // --- Message Handler ---
+// --- Message Handler ---
 client.on('message', async (message) => {
+    console.log('DEBUG: Message event received.'); // NEW LOG
     const messageId = message._id;
-    if (!messageId) return;
-
-    if (messageLocks.has(messageId)) {
-        console.log(`Duplicate message ID \${messageId} detected, ignoring...`);
+    if (!messageId) {
+        console.log('DEBUG: Message has no ID, returning.'); // NEW LOG
         return;
     }
 
-    // Lock this message ID so no other instance can process it.
-    messageLocks.set(messageId, true);
-    console.log(`Locking message ID: \${messageId}`);
+    if (messageLocks.has(messageId)) {
+        console.log(`DEBUG: Duplicate message ID \${messageId} detected, ignoring...`); // CHANGED LOG
+        return;
+    }
 
-    // We will release the lock in the single, top-level `finally` block.
+    messageLocks.set(messageId, true);
+    console.log(`DEBUG: Locking message ID: \${messageId}`); // CHANGED LOG
+
     let browser;
 
     try {
-        // --- TOP LEVEL TRY/CATCH TO PREVENT CRASHES ---
-        if (!message.content || !message.author || !message.channel) return;
-        if (message.author.bot) return;
-        if (!message.content.startsWith('!search')) return;
+        console.log('DEBUG: Entering main try block.'); // NEW LOG
+        if (!message.content || !message.author || !message.channel) {
+            console.log('DEBUG: Message missing content/author/channel, returning.'); // NEW LOG
+            return;
+        }
+        if (message.author.bot) {
+            console.log('DEBUG: Message from another bot, returning.'); // NEW LOG
+            return;
+        }
+        if (!message.content.startsWith('!search')) {
+            console.log('DEBUG: Message does not start with !search, returning.'); // NEW LOG
+            return;
+        }
 
         const query = message.content.substring(7).trim();
         if (!query) {
-            // CHANGE: Added .catch() to prevent crash on send failure
+            console.log('DEBUG: No query provided, sending error message.'); // NEW LOG
             await message.channel.sendMessage('Please provide a search term. Example: `!search email@example.com`').catch(e => console.error('Error sending "no query" message:', e));
             return;
         }
 
-        console.log(`Received search command for query: "\${query}"`);
+        console.log(`DEBUG: Received search command for query: "\${query}"`);
 
-        // CHANGE: Added .catch() to prevent crash on send failure
+        console.log('DEBUG: Attempting to send "Searching..." message...'); // NEW LOG
         await message.channel.sendMessage(`Searching for \`${query}\`... This may take a moment.`).catch(e => console.error('Error sending "Searching..." message:', e));
+        console.log('DEBUG: "Searching..." message sent successfully.'); // NEW LOG
 
-        // --- Launch Puppeteer Browser ---
-        console.log('LOG: Launching browser...');
+        console.log('DEBUG: Attempting to launch browser...'); // NEW LOG
         browser = await puppeteer.launch({
             executablePath: await chromium.executablePath(),
             args: [
@@ -118,43 +130,54 @@ client.on('message', async (message) => {
             ],
             headless: chromium.headless,
         });
-        console.log('LOG: Browser launched.');
+        console.log('DEBUG: Browser launched successfully.'); // NEW LOG
 
+        console.log('DEBUG: Attempting to create new page...'); // NEW LOG
         const page = await browser.newPage();
-        console.log('LOG: Navigating to website...');
-        await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
-        console.log('LOG: Navigated to website, waiting for search input...');
+        console.log('DEBUG: New page created successfully.'); // NEW LOG
 
-        // --- Perform the Search ---
+        console.log('DEBUG: Attempting to goto website...'); // NEW LOG
+        await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
+        console.log('DEBUG: Navigated to website successfully.'); // NEW LOG
+
+        console.log('DEBUG: Attempting to wait for search input selector...'); // NEW LOG
         await page.waitForSelector('#searchInput', { timeout: 10000 });
+        console.log('DEBUG: Search input selector found.'); // NEW LOG
+
+        console.log('DEBUG: Attempting to type query and press enter...'); // NEW LOG
         await page.type('#searchInput', query);
         await page.keyboard.press('Enter');
-        console.log('LOG: Search submitted, waiting for results...');
+        console.log('DEBUG: Search submitted successfully.'); // NEW LOG
 
+        console.log('DEBUG: Attempting to wait for results selector...'); // NEW LOG
         await page.waitForSelector('#results', { timeout: 15000 });
-        // This static wait is a good fallback for dynamic JS
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Reduced from 5s
-        console.log('LOG: Results element found.');
+        console.log('DEBUG: Results selector found. Waiting 3 seconds for JS...'); // NEW LOG
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log('DEBUG: Wait for JS is complete.'); // NEW LOG
 
-        // --- Scrape the Results ---
+        console.log('DEBUG: Attempting to find #results element...'); // NEW LOG
         const resultsElement = await page.$('#results');
         if (!resultsElement) {
-            console.log('Could not find the #results element on the page.');
-            // CHANGE: Added .catch() to prevent crash on send failure
+            console.log('DEBUG: #results element not found on page.'); // NEW LOG
             await message.channel.sendMessage('Failed to fetch results. The website structure may have changed or no results were found.').catch(e => console.error('Error sending "Could not find #results" message:', e));
             return;
         }
+        console.log('DEBUG: #results element found.'); // NEW LOG
 
+        console.log('DEBUG: Attempting to evaluate page HTML...'); // NEW LOG
         const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
+        console.log('DEBUG: Page HTML evaluated successfully.'); // NEW LOG
         console.log('--- START OF RESULTS HTML ---');
         console.log(resultsHtml);
         console.log('--- END OF RESULTS HTML ---');
 
-        // --- Format results for embed AND prepare full list for download ---
-        console.log('LOG: Attempting to parse results...');
+        // --- The rest of the code (parsing, building embed, sending) is likely fine. ---
+        // If the bot gets past this point, the issue is in the final logic.
+
+        console.log('DEBUG: Attempting to parse results with Cheerio...'); // NEW LOG
         const $ = cheerio.load(resultsHtml);
         let breachSections = $('.breach-section');
-        console.log(`Found \${breachSections.length} total breaches.`);
+        console.log(`DEBUG: Found \${breachSections.length} total breaches.`);
 
         if (breachSections.length === 0) {
             const embed = {
@@ -162,30 +185,23 @@ client.on('message', async (message) => {
                 description: `No results found for \`${query}\`.`,
                 colour: '#FF0000'
             };
-            console.log('LOG: Sending "no results" embed.');
-            // CHANGE: Added .catch() to prevent crash on send failure
+            console.log('DEBUG: Sending "no results" embed.'); // NEW LOG
             await message.channel.sendMessage({ embeds: [embed] }).catch(e => console.error('Error sending "no results" embed:', e));
         } else {
-            console.log('LOG: Building results for embed and download...');
+            console.log('DEBUG: Building results for embed and download...');
             const embedFields = [];
             const allResultLines = [];
             let resultCount = 0;
-
             breachSections.each((i, section) => {
-                // This inner loop is synchronous, so errors here are caught by the outer try/catch
                 let dbName = $(section).find('h2, h3, .font-bold').first().text().trim();
                 const cleanName = dbName.replace(/\s+/g, ' ').trim();
-
                 if (cleanName) {
-                    // --- For the FULL download file ---
-                    allResultLines.push(`--- \${cleanName} ---`);
+                    allResultLines.push(`--- ${cleanName} ---`);
                     $(section).find('tbody tr').each((j, row) => {
                         const rowData = $(row).find('td').map((k, cell) => $(cell).text().trim()).get().join(' | ');
                         if (rowData) allResultLines.push(rowData);
                     });
-                    allResultLines.push(''); // Add a blank line for spacing
-
-                    // --- For the EMBED (first 10 only) ---
+                    allResultLines.push('');
                     if (resultCount < 10) {
                         const firstRow = $(section).find('tbody tr').first();
                         const sampleData = firstRow.find('td').map((j, cell) => $(cell).text().trim()).get().join(' | ');
@@ -201,53 +217,45 @@ client.on('message', async (message) => {
                 }
             });
 
-            // --- Store the FULL list and generate a download link ---
-            console.log('LOG: Storing full results and generating download URL...');
+            console.log('DEBUG: Storing full results and generating download URL...');
             const allResultsText = allResultLines.join('\n');
             const resultId = require('crypto').randomBytes(8).toString('hex');
             resultsStore.set(resultId, { content: allResultsText });
-            // Clean up after 10 mins
             setTimeout(() => resultsStore.delete(resultId), 10 * 60 * 1000);
             const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
 
-            // --- Build the final embed with fields and a button ---
-            console.log('LOG: Building final embed object...');
+            console.log('DEBUG: Building final embed object...');
             const embed = {
                 title: 'Majic Breaches Search Results',
-                description: `Found **${breachSections.length}** breaches for \`${query}\`. Showing the first ${resultCount}.`,
+                description: `Found **\${breachSections.length}** breaches for \`${query}\`. Showing the first \${resultCount}.`,
                 colour: '#00bfff',
                 fields: embedFields
             };
             embed.fields.push({
                 name: '📥 Download Full List',
-                value: `[Click here for the complete data](${downloadUrl})`,
+                value: `[Click here for the complete data](\${downloadUrl})`,
                 inline: false
             });
 
-            console.log('LOG: Sending final embed with download link...');
-            // CHANGE: Added .catch() to prevent crash on send failure
+            console.log('DEBUG: Sending final embed with download link...');
             await message.channel.sendMessage({ embeds: [embed] }).catch(e => console.error('Error sending final embed:', e));
-            console.log(`Results stored with ID: ${resultId}. Displayed ${resultCount} in embed.`);
+            console.log(`DEBUG: Results stored with ID: ${resultId}. Displayed ${resultCount} in embed.`);
         }
-    } catch (error) {
+        } catch (error) {
         console.error('!!! PUPPETEER SEARCH ERROR !!!');
         console.error(error);
-        // Send a user-friendly error message
-        console.log('LOG: Sending PUPPETEER ERROR message...');
-        // CHANGE: Added .catch() to prevent crash on send failure
+        console.log('DEBUG: Sending PUPPETEER ERROR message...');
         await message.channel.sendMessage('An error occurred while trying to fetch results. The website may be down or the search timed out.').catch(e => console.error('Error sending "PUPPETEER ERROR" message:', e));
     } finally {
         // --- Clean Up ---
-        // CHANGE: This is now the ONLY place the browser is closed and lock is released.
-        // This ensures it happens exactly once, even if an error occurs above.
-        console.log('LOG: In top-level finally block. Closing browser and releasing lock.');
+        console.log('DEBUG: In top-level finally block. Closing browser and releasing lock.');
         if (browser) {
             await browser.close().catch(e => console.error('Error closing browser:', e));
-            console.log('Browser closed.');
+            console.log('DEBUG: Browser closed.');
         }
         // --- Release the lock for this message ---
         messageLocks.delete(messageId);
-        console.log(`Released lock for message ID: ${messageId}`);
+        console.log(`DEBUG: Released lock for message ID: ${messageId}`);
     }
 });
 
