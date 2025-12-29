@@ -23,6 +23,7 @@ const WebSocket = require('ws');
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
+const crypto = require('crypto');
 
 // --- Config ---
 const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
@@ -34,8 +35,9 @@ const api = new API({
     authentication: { revolt: BOT_TOKEN }
 });
 
-// --- Rate limiting: user + channel → last command timestamp ---
-const lastCommand = new Map(); // key: `${userId}_${channelId}` → timestamp
+// --- Deduplication: seen message IDs + rate limit per user/channel ---
+const seenMessageIds = new Set(); // Instant dup blocker
+const lastCommandTime = new Map(); // key: userId_channelId → timestamp (delayed dup blocker)
 
 let ws;
 let pingInterval;
@@ -43,41 +45,53 @@ let reconnectAttempts = 0;
 const MAX_BACKOFF = 60000;
 
 function connectWebSocket() {
-    console.log('Connecting...');
+    console.log('Connecting to Stoat...');
     ws = new WebSocket(WS_URL);
 
     ws.on('open', () => {
         console.log('✅ Bot online');
         reconnectAttempts = 0;
         clearInterval(pingInterval);
-        pingInterval = setInterval(() => ws.readyState === WebSocket.OPEN && ws.ping(), 30000);
+        pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) ws.ping();
+        }, 30000);
     });
 
     ws.on('message', async (data) => {
         try {
             const event = JSON.parse(data.toString());
+
             if (event.type !== 'Message') return;
             if (!event.content || !event.author || !event.channel || event.author.bot) return;
             if (!event.content.startsWith('!search')) return;
+
+            // --- Instant dedup by message ID ---
+            if (event._id && seenMessageIds.has(event._id)) {
+                console.log(`Blocked instant duplicate (ID: ${event._id})`);
+                return;
+            }
+            if (event._id) {
+                seenMessageIds.add(event._id);
+                setTimeout(() => seenMessageIds.delete(event._id), 60000); // Cleanup after 1 min
+            }
 
             const userId = event.author;
             const channelId = event.channel;
             const rateKey = `${userId}_${channelId}`;
             const now = Date.now();
 
-            // --- Strict rate limit: 1 command per 30 seconds per user per channel ---
-            if (lastCommand.has(rateKey) && (now - lastCommand.get(rateKey) < 30000)) {
+            // --- Rate limit: 1 command per 60 seconds per user per channel ---
+            if (lastCommandTime.has(rateKey) && (now - lastCommandTime.get(rateKey) < 60000)) {
                 console.log(`Rate limited user ${userId} in channel ${channelId}`);
-                return; // Silently ignore duplicates/spam
+                return;
             }
-            lastCommand.set(rateKey, now);
+            lastCommandTime.set(rateKey, now);
 
             const query = event.content.substring(7).trim();
             if (!query) return;
 
-            console.log(`Valid search from ${userId}: "${query}"`);
+            console.log(`Processing search: "${query}" from user ${userId}`);
 
-            // Send searching message once
             await api.post(`/channels/${channelId}/messages`, {
                 content: `Searching for \`${query}\`... This may take a moment.`
             }).catch(() => {});
@@ -99,11 +113,6 @@ function connectWebSocket() {
                 await new Promise(r => setTimeout(r, 5000));
 
                 const resultsHtml = await page.evaluate(() => document.querySelector('#results')?.innerHTML || '');
-                if (!resultsHtml.includes('breach-section')) {
-                    await api.post(`/channels/${channelId}/messages`, { content: `No results found for \`${query}\`.` });
-                    return;
-                }
-
                 const $ = cheerio.load(resultsHtml);
                 const breachSections = $('.breach-section');
 
@@ -117,9 +126,9 @@ function connectWebSocket() {
                     const cleanName = dbName.replace(/\s+/g, ' ').trim();
 
                     if (previewCount < 10) {
-                        const firstRow = $(section).find('tbody tr').first().text().trim();
+                        const rowData = $(section).find('tbody tr').first().find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
                         let line = `**${cleanName}**`;
-                        if (firstRow) line += `\n\`${firstRow.substring(0, 150)}${firstRow.length > 150 ? '...' : ''}\``;
+                        if (rowData) line += `\n\`${rowData.substring(0, 150)}${rowData.length > 150 ? '...' : ''}\``;
                         previewLines.push(line);
                         previewCount++;
                     }
@@ -143,7 +152,7 @@ function connectWebSocket() {
                 await api.post(`/channels/${channelId}/messages`, { embeds: [embed] });
 
                 if (breachSections.length > 0) {
-                    const id = require('crypto').randomBytes(8).toString('hex');
+                    const id = crypto.randomBytes(8).toString('hex');
                     resultsStore.set(id, { content: fullLines.join('\n') });
                     setTimeout(() => resultsStore.delete(id), 600000);
 
