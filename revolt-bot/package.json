@@ -5,7 +5,7 @@
   "description": "Revolt bot for Majic Breaches search",
   "main": "index.js",
   "scripts": {
-    "start": "pm2-runtime start index.js --name bot --no-daemon --log-date-format 'YYYY-MM-DD HH:mm:ss Z'",
+    "start": "pm2-runtime start index.js --name bot --log /var/log/app.log --out /var/log/app-out.log --err /var/log/app-err.log",
     "dev": "node index.js",
     "build": "echo 'No build step required'"
   },
