@@ -154,7 +154,7 @@ const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
             console.log(resultsHtml);
             console.log('--- END OF RESULTS HTML ---');
 
-                      // --- NEW: Format ALL results for download and first 10 for display ---
+                     // --- NEW: Format ALL results for download and first 10 for display ---
             const embed = { title: 'Majic Breaches Search Results', colour: '#00bfff' };
             const $ = cheerio.load(resultsHtml);
             console.log('Attempting to parse results...');
