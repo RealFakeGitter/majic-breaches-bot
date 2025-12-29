@@ -1,30 +1,21 @@
-// --- Mini Web Server for Render Health Check ---
+// --- Mini Web Server ---
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/health', (req, res) => {
-    res.status(200).send('OK');
-});
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
-// --- In-memory storage for results ---
 const resultsStore = new Map();
 
-// --- Endpoint to serve results as a downloadable text file ---
 app.get('/results/:id', (req, res) => {
-    const resultId = req.params.id;
-    const resultData = resultsStore.get(resultId);
-    if (!resultData) {
-        return res.status(404).send('Results not found or have expired.');
-    }
+    const data = resultsStore.get(req.params.id);
+    if (!data) return res.status(404).send('Not found or expired');
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="majic-results-${resultId}.txt"`);
-    res.send(resultData.content);
+    res.setHeader('Content-Disposition', `attachment; filename="majic-results-${req.params.id}.txt"`);
+    res.send(data.content);
 });
 
-const server = app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server on port ${PORT}`));
 
 // --- Dependencies ---
 const { API } = require('revolt-api');
@@ -43,74 +34,51 @@ const api = new API({
     authentication: { revolt: BOT_TOKEN }
 });
 
-// --- State ---
-let isProcessing = false;
+// --- Rate limiting: user + channel → last command timestamp ---
+const lastCommand = new Map(); // key: `${userId}_${channelId}` → timestamp
+
 let ws;
 let pingInterval;
 let reconnectAttempts = 0;
 const MAX_BACKOFF = 60000;
 
-// --- Strong deduplication: track recent commands by user + channel + query ---
-const recentCommands = new Map(); // key: `${author}_${channel}_${queryHash}`, value: timestamp
-
-function getCommandKey(author, channel, query) {
-    const normalized = query.toLowerCase().trim();
-    return `${author}_${channel}_${normalized}`;
-}
-
-// --- WebSocket ---
 function connectWebSocket() {
-    console.log('Connecting to Revolt...');
+    console.log('Connecting...');
     ws = new WebSocket(WS_URL);
 
     ws.on('open', () => {
         console.log('✅ Bot online');
         reconnectAttempts = 0;
         clearInterval(pingInterval);
-        pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.ping();
-            }
-        }, 30000);
+        pingInterval = setInterval(() => ws.readyState === WebSocket.OPEN && ws.ping(), 30000);
     });
-
-    ws.on('pong', () => { /* keep alive */ });
 
     ws.on('message', async (data) => {
         try {
             const event = JSON.parse(data.toString());
-
             if (event.type !== 'Message') return;
             if (!event.content || !event.author || !event.channel || event.author.bot) return;
             if (!event.content.startsWith('!search')) return;
 
-            const message = event;
-            const query = message.content.substring(7).trim();
+            const userId = event.author;
+            const channelId = event.channel;
+            const rateKey = `${userId}_${channelId}`;
+            const now = Date.now();
+
+            // --- Strict rate limit: 1 command per 30 seconds per user per channel ---
+            if (lastCommand.has(rateKey) && (now - lastCommand.get(rateKey) < 30000)) {
+                console.log(`Rate limited user ${userId} in channel ${channelId}`);
+                return; // Silently ignore duplicates/spam
+            }
+            lastCommand.set(rateKey, now);
+
+            const query = event.content.substring(7).trim();
             if (!query) return;
 
-            // --- Bulletproof deduplication ---
-            const cmdKey = getCommandKey(message.author, message.channel, query);
-            const now = Date.now();
-            const recent = recentCommands.get(cmdKey);
+            console.log(`Valid search from ${userId}: "${query}"`);
 
-            if (recent && (now - recent < 15000)) { // Same command in last 15 seconds
-                console.log(`🛡️ Blocked duplicate/triplicate command: "${query}" from ${message.author}`);
-                return;
-            }
-            recentCommands.set(cmdKey, now);
-
-            // Optional: clean old entries
-            if (recentCommands.size > 1000) recentCommands.clear();
-
-            if (isProcessing) {
-                console.log('Busy, skipping...');
-                return;
-            }
-            isProcessing = true;
-
-            console.log(`Search: "${query}" from ${message.author}`);
-
-            await api.post(`/channels/${message.channel}/messages`, {
+            // Send searching message once
+            await api.post(`/channels/${channelId}/messages`, {
                 content: `Searching for \`${query}\`... This may take a moment.`
             }).catch(() => {});
 
@@ -130,84 +98,73 @@ function connectWebSocket() {
                 await page.waitForSelector('#results', { timeout: 15000 });
                 await new Promise(r => setTimeout(r, 5000));
 
-                const resultsElement = await page.$('#results');
-                if (!resultsElement) {
-                    await api.post(`/channels/${message.channel}/messages`, { content: 'No results element found.' });
+                const resultsHtml = await page.evaluate(() => document.querySelector('#results')?.innerHTML || '');
+                if (!resultsHtml.includes('breach-section')) {
+                    await api.post(`/channels/${channelId}/messages`, { content: `No results found for \`${query}\`.` });
                     return;
                 }
 
-                const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
                 const $ = cheerio.load(resultsHtml);
                 const breachSections = $('.breach-section');
 
                 const previewLines = [];
                 let previewCount = 0;
-                const fullResultLines = [];
+                const fullLines = [];
 
                 breachSections.each((i, section) => {
-                    try {
-                        let dbName = $(section).find('h2, h3, .font-bold').first().text().trim();
-                        if (!dbName) return;
-                        const cleanName = dbName.replace(/\s+/g, ' ').trim();
+                    const dbName = $(section).find('h2, h3, .font-bold').first().text().trim();
+                    if (!dbName) return;
+                    const cleanName = dbName.replace(/\s+/g, ' ').trim();
 
-                        if (previewCount < 10) {
-                            const firstRow = $(section).find('tbody tr').first();
-                            const rowData = firstRow.find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
-                            let line = `**${cleanName}**`;
-                            if (rowData) line += `\n\`${rowData.substring(0, 150)}${rowData.length > 150 ? '...' : ''}\``;
-                            previewLines.push(line);
-                            previewCount++;
-                        }
+                    if (previewCount < 10) {
+                        const firstRow = $(section).find('tbody tr').first().text().trim();
+                        let line = `**${cleanName}**`;
+                        if (firstRow) line += `\n\`${firstRow.substring(0, 150)}${firstRow.length > 150 ? '...' : ''}\``;
+                        previewLines.push(line);
+                        previewCount++;
+                    }
 
-                        fullResultLines.push(`--- ${cleanName} ---`);
-                        $(section).find('tbody tr').each((_, row) => {
-                            const rowData = $(row).find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
-                            if (rowData) fullResultLines.push(rowData);
-                        });
-                        fullResultLines.push('');
-                    } catch (e) {}
+                    fullLines.push(`--- ${cleanName} ---`);
+                    $(section).find('tbody tr').each((_, row) => {
+                        const cells = $(row).find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
+                        if (cells) fullLines.push(cells);
+                    });
+                    fullLines.push('');
                 });
-
-                const allResultsText = fullResultLines.join('\n');
 
                 const embed = {
                     title: 'Majic Breaches Search Results',
-                    colour: breachSections.length === 0 ? '#FF0000' : '#00bfff',
-                    description: breachSections.length === 0
-                        ? `No results found for \`${query}\`.`
-                        : `Found **${breachSections.length}** result${breachSections.length === 1 ? '' : 's'} for \`${query}\`\n\n${previewLines.join('\n\n')}`
+                    colour: breachSections.length ? '#00bfff' : '#FF0000',
+                    description: breachSections.length
+                        ? `Found **${breachSections.length}** result${breachSections.length === 1 ? '' : 's'} for \`${query}\`\n\n${previewLines.join('\n\n')}`
+                        : `No results found for \`${query}\`.`
                 };
 
-                await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
+                await api.post(`/channels/${channelId}/messages`, { embeds: [embed] });
 
                 if (breachSections.length > 0) {
-                    const resultId = require('crypto').randomBytes(8).toString('hex');
-                    resultsStore.set(resultId, { content: allResultsText });
-                    setTimeout(() => resultsStore.delete(resultId), 600000);
+                    const id = require('crypto').randomBytes(8).toString('hex');
+                    resultsStore.set(id, { content: fullLines.join('\n') });
+                    setTimeout(() => resultsStore.delete(id), 600000);
 
-                    const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
-                    await api.post(`/channels/${message.channel}/messages`, {
-                        content: `**Full results download** (${breachSections.length} breach${breachSections.length === 1 ? '' : 'es'}):\n${downloadUrl}`
+                    await api.post(`/channels/${channelId}/messages`, {
+                        content: `**Full results download** (${breachSections.length} breach${breachSections.length === 1 ? '' : 'es'}):\nhttps://majic-breaches-revolt-bot.onrender.com/results/${id}`
                     });
                 }
 
-            } catch (error) {
-                console.error('Search failed:', error);
-                await api.post(`/channels/${message.channel}/messages`, {
-                    content: 'Search failed — site may be down or timed out.'
-                }).catch(() => {});
+            } catch (err) {
+                console.error('Search error:', err);
+                await api.post(`/channels/${channelId}/messages`, { content: 'Search failed — try again later.' }).catch(() => {});
             } finally {
                 if (browser) await browser.close();
-                isProcessing = false;
             }
         } catch (err) {
-            console.error('Message handler error:', err);
-            isProcessing = false;
+            console.error('Handler error:', err);
         }
     });
 
     ws.on('close', (code) => {
-        console.log(`WebSocket closed (code ${code}) — reconnecting...`);
+        console.log(`Closed (${code}) — reconnecting...`);
         clearInterval(pingInterval);
         if (code !== 1000) {
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), MAX_BACKOFF);
