@@ -1,33 +1,29 @@
+
 {
   "name": "majic-breaches-revolt-bot",
   "version": "1.0.0",
   "description": "Revolt bot for Majic Breaches search",
   "main": "index.js",
-   "scripts": {
-    "start": "node index.js"
-  },
+  "scripts": {
+    "start": "pm2-runtime start index.js --name bot",
     "dev": "node index.js",
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "revolt-api": "^0.8.9",
-     "revolt.js": "^7.2.0", 
-      "axios": "^1.7.9",
-     "cheerio": "^1.0.0-rc.12",
-    "express": "^3.21.2" ,
+    "@sparticuz/chromium": "^143.0.0" ,
+    "axios": "^1.7.9" ,
+    "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.6.1",
-    "puppeteer-core": "^24.34.0" ,
-    "pm2": "^1.3.0" ,
-    "@sparticuz/chromium": "^143.0.0"
+    "express": "^3.21.2",
+    "pm2": "^2.3.0",
+    "puppeteer-core": "^24.34.0",
+    "revolt-api": "^0.8.9",
+    "revolt.js": "^7.2.0"
   },
   "engines": {
     "node": ">=18.0.0"
   }
 }
-
-
-
-
   
     
     
