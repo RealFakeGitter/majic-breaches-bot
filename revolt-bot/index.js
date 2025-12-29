@@ -2,10 +2,8 @@
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-console.log(`Attempting to start health check server on port ${PORT}...`);
 
 app.get('/health', (req, res) => {
-    console.log('Health check endpoint was hit.');
     res.status(200).send('OK');
 });
 
@@ -24,146 +22,123 @@ app.get('/results/:id', (req, res) => {
     res.send(resultData.content);
 });
 
-try {
-    const server = app.listen(PORT, () => {
-        console.log(`✅ Health check server listening successfully on port ${PORT}`);
-    });
-    server.on('error', (err) => {
-        console.error('❌ Failed to start health check server:', err);
-    });
-} catch (err) {
-    console.error('❌ Critical error starting server:', err);
-}
-// --- End Mini Web Server ---
+const server = app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
+});
 
+// --- Dependencies ---
 const { API } = require('revolt-api');
 const WebSocket = require('ws');
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
 
-// --- Configuration ---
+// --- Config ---
 const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
 const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
 const WS_URL = `wss://events.stoat.chat?token=${BOT_TOKEN}`;
 
-// --- Initialize API ---
 const api = new API({
     baseURL: "https://api.stoat.chat",
-    authentication: {
-        revolt: BOT_TOKEN
-    }
+    authentication: { revolt: BOT_TOKEN }
 });
 
-// --- State variables ---
+// --- State ---
 let isProcessing = false;
 let ws;
 let pingInterval;
 let reconnectAttempts = 0;
-const MAX_BACKOFF = 60000; // 60 seconds max
-const processedMessageIds = new Set(); // For deduplication
+const MAX_BACKOFF = 60000;
 
-// --- WebSocket connection handler ---
+// --- Strong deduplication: track recent commands by user + channel + query ---
+const recentCommands = new Map(); // key: `${author}_${channel}_${queryHash}`, value: timestamp
+
+function getCommandKey(author, channel, query) {
+    const normalized = query.toLowerCase().trim();
+    return `${author}_${channel}_${normalized}`;
+}
+
+// --- WebSocket ---
 function connectWebSocket() {
-    console.log('Connecting to Revolt WebSocket...');
+    console.log('Connecting to Revolt...');
     ws = new WebSocket(WS_URL);
 
     ws.on('open', () => {
-        console.log('WebSocket connection opened. Bot is now online.');
+        console.log('✅ Bot online');
         reconnectAttempts = 0;
-
-        // Send ping every 30 seconds to keep connection alive
         clearInterval(pingInterval);
         pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
-                console.log('Sending keep-alive ping...');
                 ws.ping();
             }
         }, 30000);
     });
 
-    ws.on('pong', () => {
-        console.log('Received pong — connection healthy.');
-    });
+    ws.on('pong', () => { /* keep alive */ });
 
     ws.on('message', async (data) => {
         try {
             const event = JSON.parse(data.toString());
 
-            // --- Deduplicate by message ID (critical for Revolt duplicates) ---
-            if (event.type === 'Message' && event._id) {
-                if (processedMessageIds.has(event._id)) {
-                    console.log(`Duplicate message ignored (ID: ${event._id})`);
-                    return;
-                }
-                processedMessageIds.add(event._id);
-                setTimeout(() => processedMessageIds.delete(event._id), 10000); // Clean up after 10s
-            }
-
-            if (isProcessing) {
-                console.log('Already processing a command, skipping...');
-                return;
-            }
-            isProcessing = true;
-
-            // --- Only handle new messages with !search ---
             if (event.type !== 'Message') return;
-            if (!event.content || !event.author || !event.channel) return;
-            if (event.author.bot) return;
+            if (!event.content || !event.author || !event.channel || event.author.bot) return;
             if (!event.content.startsWith('!search')) return;
 
             const message = event;
             const query = message.content.substring(7).trim();
+            if (!query) return;
 
-            if (!query) {
-                return api.post(`/channels/${message.channel}/messages`, {
-                    content: 'Please provide a search term. Example: `!search email@example.com`'
-                });
+            // --- Bulletproof deduplication ---
+            const cmdKey = getCommandKey(message.author, message.channel, query);
+            const now = Date.now();
+            const recent = recentCommands.get(cmdKey);
+
+            if (recent && (now - recent < 15000)) { // Same command in last 15 seconds
+                console.log(`🛡️ Blocked duplicate/triplicate command: "${query}" from ${message.author}`);
+                return;
             }
+            recentCommands.set(cmdKey, now);
 
-            console.log(`Searching for: "${query}"`);
+            // Optional: clean old entries
+            if (recentCommands.size > 1000) recentCommands.clear();
+
+            if (isProcessing) {
+                console.log('Busy, skipping...');
+                return;
+            }
+            isProcessing = true;
+
+            console.log(`Search: "${query}" from ${message.author}`);
 
             await api.post(`/channels/${message.channel}/messages`, {
                 content: `Searching for \`${query}\`... This may take a moment.`
-            }).catch(err => console.error('Failed to send searching message:', err));
+            }).catch(() => {});
 
             let browser;
             try {
                 browser = await puppeteer.launch({
                     executablePath: await chromium.executablePath(),
-                    args: [
-                        ...chromium.args,
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu'
-                    ],
+                    args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
                     headless: chromium.headless,
                 });
 
                 const page = await browser.newPage();
                 await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
-
                 await page.waitForSelector('#searchInput', { timeout: 10000 });
                 await page.type('#searchInput', query);
                 await page.keyboard.press('Enter');
-
                 await page.waitForSelector('#results', { timeout: 15000 });
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                await new Promise(r => setTimeout(r, 5000));
 
                 const resultsElement = await page.$('#results');
                 if (!resultsElement) {
-                    await api.post(`/channels/${message.channel}/messages`, {
-                        content: 'Failed to fetch results. Website structure may have changed.'
-                    });
+                    await api.post(`/channels/${message.channel}/messages`, { content: 'No results element found.' });
                     return;
                 }
 
                 const resultsHtml = await page.evaluate(el => el.innerHTML, resultsElement);
-
                 const $ = cheerio.load(resultsHtml);
                 const breachSections = $('.breach-section');
-                console.log(`Found ${breachSections.length} breach sections.`);
 
                 const previewLines = [];
                 let previewCount = 0;
@@ -171,99 +146,76 @@ function connectWebSocket() {
 
                 breachSections.each((i, section) => {
                     try {
-                        let dbName = $(section).find('h2').first().text().trim() ||
-                                    $(section).find('h3').first().text().trim() ||
-                                    $(section).find('.font-bold').first().text().trim();
+                        let dbName = $(section).find('h2, h3, .font-bold').first().text().trim();
                         if (!dbName) return;
-
                         const cleanName = dbName.replace(/\s+/g, ' ').trim();
 
-                        // Preview: first row only, max 10 breaches
                         if (previewCount < 10) {
                             const firstRow = $(section).find('tbody tr').first();
-                            const rowData = firstRow.find('td').map((_, cell) => $(cell).text().trim()).get().join(' | ');
+                            const rowData = firstRow.find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
                             let line = `**${cleanName}**`;
-                            if (rowData) {
-                                line += `\n\`${rowData.substring(0, 150)}${rowData.length > 150 ? '...' : ''}\``;
-                            }
+                            if (rowData) line += `\n\`${rowData.substring(0, 150)}${rowData.length > 150 ? '...' : ''}\``;
                             previewLines.push(line);
                             previewCount++;
                         }
 
-                        // Full results: all rows, all breaches
                         fullResultLines.push(`--- ${cleanName} ---`);
                         $(section).find('tbody tr').each((_, row) => {
-                            const rowData = $(row).find('td').map((_, cell) => $(cell).text().trim()).get().join(' | ');
+                            const rowData = $(row).find('td').map((_, c) => $(c).text().trim()).get().join(' | ');
                             if (rowData) fullResultLines.push(rowData);
                         });
                         fullResultLines.push('');
-                    } catch (err) {
-                        console.error(`Error processing section ${i}:`, err);
-                    }
+                    } catch (e) {}
                 });
 
                 const allResultsText = fullResultLines.join('\n');
 
-                // Send preview embed
                 const embed = {
                     title: 'Majic Breaches Search Results',
-                    colour: '#00bfff'
+                    colour: breachSections.length === 0 ? '#FF0000' : '#00bfff',
+                    description: breachSections.length === 0
+                        ? `No results found for \`${query}\`.`
+                        : `Found **${breachSections.length}** result${breachSections.length === 1 ? '' : 's'} for \`${query}\`\n\n${previewLines.join('\n\n')}`
                 };
-
-                if (previewCount === 0) {
-                    embed.description = `No results found for \`${query}\`.`;
-                    embed.colour = '#FF0000';
-                } else {
-                    embed.description = `Found **${breachSections.length}** result${breachSections.length === 1 ? '' : 's'} for \`${query}\`\n\n${previewLines.join('\n\n')}`;
-                }
 
                 await api.post(`/channels/${message.channel}/messages`, { embeds: [embed] });
 
-                // Send download link if results exist
                 if (breachSections.length > 0) {
                     const resultId = require('crypto').randomBytes(8).toString('hex');
                     resultsStore.set(resultId, { content: allResultsText });
-
-                    setTimeout(() => resultsStore.delete(resultId), 10 * 60 * 1000); // Expire in 10 min
+                    setTimeout(() => resultsStore.delete(resultId), 600000);
 
                     const downloadUrl = `https://majic-breaches-revolt-bot.onrender.com/results/${resultId}`;
-                    const linkMsg = `**Full results download** (${breachSections.length} breach${breachSections.length === 1 ? '' : 'es'}):\n${downloadUrl}`;
-
-                    await api.post(`/channels/${message.channel}/messages`, { content: linkMsg });
-                    console.log(`Download link sent: ${resultId}`);
+                    await api.post(`/channels/${message.channel}/messages`, {
+                        content: `**Full results download** (${breachSections.length} breach${breachSections.length === 1 ? '' : 'es'}):\n${downloadUrl}`
+                    });
                 }
 
             } catch (error) {
-                console.error('Puppeteer error:', error);
+                console.error('Search failed:', error);
                 await api.post(`/channels/${message.channel}/messages`, {
-                    content: 'An error occurred while searching. The site may be down or timed out.'
+                    content: 'Search failed — site may be down or timed out.'
                 }).catch(() => {});
             } finally {
                 if (browser) await browser.close();
+                isProcessing = false;
             }
         } catch (err) {
             console.error('Message handler error:', err);
-        } finally {
             isProcessing = false;
         }
     });
 
-    ws.on('error', (err) => {
-        console.error('WebSocket error:', err);
-    });
-
-    ws.on('close', (code, reason) => {
-        console.log(`WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+    ws.on('close', (code) => {
+        console.log(`WebSocket closed (code ${code}) — reconnecting...`);
         clearInterval(pingInterval);
-
-        if (code !== 1000) { // Not normal closure
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_BACKOFF);
-            reconnectAttempts++;
-            console.log(`Reconnecting in ${delay / 1000}s... (attempt ${reconnectAttempts})`);
+        if (code !== 1000) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), MAX_BACKOFF);
             setTimeout(connectWebSocket, delay);
         }
     });
+
+    ws.on('error', (err) => console.error('WS error:', err));
 }
 
-// Start the bot
 connectWebSocket();
