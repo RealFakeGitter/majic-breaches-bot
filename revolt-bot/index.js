@@ -87,25 +87,26 @@ ws.on('message', async (data) => {
         }
 
         console.log('Attempting to send "Searching..." message...');
-        await api.post(`/channels/${message.channel}/messages`, { 
-            content: `Searching for \`${query}\`... This may take a moment.` 
+        await api.post(`/channels/${message.channel}/messages`, {
+            content: `Searching for \`${query}\`... This may take a moment.`
         }).catch(e => console.error('Error sending "Searching..." message:', e));
 
         console.log(`Received search command for query: "${query}"`);
 
         let browser;
         try {
-            browser = await puppeteer.launch({
-                executablePath: await chromium.executablePath(),
-                args: [
-                    ...chromium.args,
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu'
-                ],
-                headless: chromium.headless,
-            });
+           browser = await puppeteer.launch({
+    executablePath: await chromium.executablePath(),
+    args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--max-old-space-size=256' // <-- ADD THIS LINE
+    ],
+    headless: chromium.headless,
+});
 
             const page = await browser.newPage();
             await page.goto(WEBSITE_URL, { waitUntil: 'networkidle2' });
@@ -121,8 +122,8 @@ ws.on('message', async (data) => {
             const resultsElement = await page.$('#results');
             if (!resultsElement) {
                 console.log('Could not find the #results element on the page.');
-                await api.post(`/channels/${message.channel}/messages`, { 
-                    content: 'Failed to fetch results. The website structure may have changed or no results were found.' 
+                await api.post(`/channels/${message.channel}/messages`, {
+                    content: 'Failed to fetch results. The website structure may have changed or no results were found.'
                 }).catch(e => console.error('Error sending message:', e));
                 return;
             }
@@ -217,8 +218,8 @@ ws.on('message', async (data) => {
         } catch (error) {
             console.error('!!! PUPPETEER SEARCH ERROR !!!');
             console.error(error);
-            await api.post(`/channels/${message.channel}/messages`, { 
-                content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.' 
+            await api.post(`/channels/${message.channel}/messages`, {
+                content: 'An error occurred while trying to fetch results. The website may be down or the search timed out.'
             }).catch(e => console.error('Error sending error message:', e));
         } finally {
             if (browser) {
