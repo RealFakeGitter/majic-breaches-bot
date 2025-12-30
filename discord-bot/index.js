@@ -1,29 +1,30 @@
-require('dotenv').config(); // Load .env file if present (optional for Render)
+require('dotenv').config();
 
 const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const express = require('express');
 
-// === Debug logging at startup ===
-console.log('🚀 Starting bot...');
+// === Startup Debug ===
+console.log('🚀 Bot starting...');
 console.log('Node version:', process.version);
-console.log('🔑 DISCORD_BOT_TOKEN loaded?', !!process.env.DISCORD_BOT_TOKEN ? 'YES' : 'NO (MISSING!)');
+console.log('🔑 DISCORD_BOT_TOKEN loaded?', !!process.env.DISCORD_BOT_TOKEN ? 'YES' : 'NO');
 if (process.env.DISCORD_BOT_TOKEN) {
-  console.log('Token preview (first 10 chars):', process.env.DISCORD_BOT_TOKEN.slice(0, 10) + '...');
+  console.log('Token preview:', process.env.DISCORD_BOT_TOKEN.slice(0, 10) + '...');
 } else {
-  console.error('❌ No token found! Check Render Environment Variables.');
+  console.error('❌ MISSING TOKEN! Check Render env vars.');
+  process.exit(1);
 }
 
-// === Keep-alive HTTP server for Render Web Service ===
+// === Keep-alive server ===
 const app = express();
 app.get('/', (req, res) => res.status(200).send('Bot alive!'));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Ping server listening on port ${PORT}`);
+  console.log(`Ping server on port ${PORT}`);
 });
 
-// === Discord Client ===
+// === Client ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -32,141 +33,130 @@ const client = new Client({
   ]
 });
 
-// === Event Listeners ===
+// === Super Debug Listeners ===
+client.on('debug', (info) => {
+  console.log('[DEBUG]', info);  // This will show gateway identify, ratelimits, etc!
+});
+
+client.on('error', (err) => console.error('[CLIENT ERROR]', err));
+client.ws.on('open', () => console.log('[WS] Connection opened'));
+client.ws.on('close', (code, reason) => console.log('[WS] Closed:', code, reason || 'no reason'));
+client.ws.on('error', (err) => console.error('[WS ERROR]', err));
+
 client.once('ready', () => {
-  console.log(`✅ Bot ready! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
-  console.log('Bot is ready to receive !search commands.');
+  console.log(`✅ READY! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
 });
 
-client.on('error', (err) => {
-  console.error('❌ Client error:', err.message || err);
-});
-
-client.ws.on('error', (err) => {
-  console.error('❌ WebSocket error:', err.message || err);
-});
-
-// === Message handling ===
+// === Message Handler (unchanged) ===
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!search')) return;
 
   const query = message.content.substring(7).trim();
-  if (!query) {
-    return message.reply('Please provide a search term. Example: `!search email@example.com`');
-  }
+  if (!query) return message.reply('Provide a search term. E.g. `!search email@example.com`');
 
-  await message.reply(`Searching for \`${query}\`... This may take a moment.`);
-  console.log(`Received search command for query: "${query}"`);
+  await message.reply(`Searching \`${query}\`...`);
+  console.log(`Search command: "${query}"`);
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage();
     await page.goto('https://majicbreaches.iceiy.com/', { waitUntil: 'networkidle2' });
-    console.log('Navigated to website, waiting for search input...');
 
     await page.waitForSelector('#searchInput', { timeout: 10000 });
     await page.type('#searchInput', query);
     await page.keyboard.press('Enter');
-    console.log('Search submitted, waiting for results...');
 
     await page.waitForSelector('#results', { timeout: 15000 });
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS
+    await new Promise(r => setTimeout(r, 5000));
 
     const resultsHtml = await page.$eval('#results', el => el.innerHTML);
-    console.log('Results found. Parsing HTML...');
+    console.log('Results parsed.');
 
     const embed = new EmbedBuilder()
-      .setTitle(`Majic Breaches Search Results`)
-      .setDescription(`Results for: \`${query}\``)
+      .setTitle(`Majic Breaches Results`)
+      .setDescription(`For: \`${query}\``)
       .setColor('#00bfff');
 
     const $ = cheerio.load(resultsHtml);
-    const breachSections = $('.breach-section');
-    let resultCount = 0;
+    const sections = $('.breach-section');
+    let count = 0;
 
-    breachSections.each((i, section) => {
-      if (resultCount >= 10) return false;
-      const dbName = $(section).find('h2').first().text().trim();
-      const description = $(section).find('p').first().text().trim();
-      const firstRow = $(section).find('tbody tr').first();
+    sections.each((i, sec) => {
+      if (count >= 10) return false;
+      const dbName = $(sec).find('h2').first().text().trim();
+      const desc = $(sec).find('p').first().text().trim();
+      const firstRow = $(sec).find('tbody tr').first();
 
       if (dbName && firstRow.length) {
-        const rowData = $(firstRow).find('td').map((i, el) => $(el).text().trim()).get().join(' | ');
-        const cleanDescription = description.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        const rowData = $(firstRow).find('td').map((_, el) => $(el).text().trim()).get().join(' | ');
+        const cleanDesc = desc.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-        let fieldText = cleanDescription;
-        if (rowData) {
-          fieldText += `\n\n**Sample Data:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
-        }
+        let field = cleanDesc;
+        if (rowData) field += `\n\n**Sample:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
 
-        embed.addFields({ name: `🔓 ${dbName}`, value: fieldText.substring(0, 1024), inline: false });
-        resultCount++;
+        embed.addFields({ name: `🔓 ${dbName}`, value: field.substring(0, 1024), inline: false });
+        count++;
       }
     });
 
-    if (resultCount === 0) {
-      embed.setDescription(`No results found for \`${query}\`.`).setColor('#FF0000');
-    }
+    if (count === 0) embed.setDescription(`No results.`).setColor('#FF0000');
 
-    if (resultCount > 0) {
-      let fileContent = `Majic Breaches Search Results for: ${query}\n`;
-      fileContent += `Generated on: ${new Date().toLocaleString()}\n`;
-      fileContent += '==================================================\n\n';
+    if (count > 0) {
+      let txt = `Results for ${query}\nGenerated: ${new Date().toLocaleString()}\n\n`;
+      $('.breach-section').each((_, sec) => {
+        const db = $(sec).find('h2').first().text().trim();
+        const d = $(sec).find('p').first().text().trim();
+        const rows = $(sec).find('tbody tr');
 
-      $('.breach-section').each((i, section) => {
-        const dbName = $(section).find('h2').first().text().trim();
-        const description = $(section).find('p').first().text().trim();
-        const rows = $(section).find('tbody tr');
-
-        fileContent += `--- Database: ${dbName} ---\n`;
-        fileContent += `${description}\n\n`;
-
-        if (rows.length > 0) {
-          const headers = $(section).find('thead th').map((i, el) => $(el).text().trim()).get();
-          fileContent += headers.join('\t') + '\n';
-          fileContent += '----------------------------------------\n';
-
-          rows.each((j, row) => {
-            const rowData = $(row).find('td').map((k, el) => $(el).text().trim()).get().join('\t');
-            fileContent += rowData + '\n';
+        txt += `--- ${db} ---\n${d}\n\n`;
+        if (rows.length) {
+          const headers = $(sec).find('thead th').map((_, el) => $(el).text().trim()).get();
+          txt += headers.join('\t') + '\n----------------------------------------\n';
+          rows.each((_, row) => {
+            const data = $(row).find('td').map((_, el) => $(el).text().trim()).get().join('\t');
+            txt += data + '\n';
           });
-        } else {
-          fileContent += 'No data found in this entry.\n';
-        }
-        fileContent += '\n==================================================\n\n';
+        } else txt += 'No data.\n';
+        txt += '\n==================================================\n\n';
       });
 
-      const buffer = Buffer.from(fileContent, 'utf-8');
-      const fileName = `majic_results_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
-      const attachment = new AttachmentBuilder(buffer, { name: fileName });
+      const buffer = Buffer.from(txt, 'utf-8');
+      const filename = `results_${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+      const attach = new AttachmentBuilder(buffer, { name: filename });
 
-      await message.channel.send({ embeds: [embed], files: [attachment] });
+      await message.channel.send({ embeds: [embed], files: [attach] });
     } else {
       await message.channel.send({ embeds: [embed] });
     }
-  } catch (error) {
-    console.error('!!! PUPPETEER SEARCH ERROR !!!', error);
-    await message.reply('Failed to fetch results. The website may be down or the search timed out.');
+  } catch (err) {
+    console.error('!!! SEARCH ERROR !!!', err);
+    await message.reply('Search failed (site down or timeout?).');
   } finally {
-    if (browser) {
-      await browser.close();
-      console.log('Browser closed.');
-    }
+    if (browser) await browser.close();
   }
 });
 
-// === Login with better error handling ===
-console.log('🔄 Attempting Discord login...');
-client.login(process.env.DISCORD_BOT_TOKEN)
-  .then(() => {
-    console.log('🎉 Login promise resolved successfully');
-  })
-  .catch((err) => {
-    console.error('💥 Login FAILED:', err.message || err);
-    // Optional: process.exit(1); // Uncomment if you want Render to restart on token failure
-  });
+// === Login with retry & debug ===
+async function loginWithRetry(attempt = 1, maxAttempts = 3) {
+  console.log(`[LOGIN] Attempt ${attempt}/${maxAttempts}...`);
+
+  try {
+    await client.login(process.env.DISCORD_BOT_TOKEN);
+    console.log('[LOGIN] Promise resolved');
+  } catch (err) {
+    console.error('[LOGIN FAIL]', err.message || err);
+    if (attempt < maxAttempts) {
+      console.log('[LOGIN] Retrying in 10s...');
+      await new Promise(r => setTimeout(r, 10000));
+      return loginWithRetry(attempt + 1, maxAttempts);
+    } else {
+      console.error('[LOGIN] Max attempts reached. Giving up.');
+      process.exit(1);  // Crash so Render shows failed + logs everything
+    }
+  }
+}
+
+console.log('[START] Initiating login...');
+loginWithRetry();
