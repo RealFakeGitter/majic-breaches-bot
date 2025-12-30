@@ -9,15 +9,15 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-     "cheerio": "^1.0.0-rc.12",
-    "express": "^4.18.2" ,
-    "discord.js": "^14.22.1",
+    "axios": "^1.13.2",
+     "cheerio": "^1.1.2",
+    "express": "5.2.1" ,
+    "discord.js": "^14.25.1",
     "convex": "^1.28.0", 
-      "dotenv": "^16.6.1" ,
-    "puppeteer": "^3.0.0"
+      "dotenv": "^17.2.3" ,
+    "puppeteer": "^24.34.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=25.2.1"
   }
 }
