@@ -24,6 +24,47 @@ const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
 
+// At top of index.js, right after requires
+require('dotenv').config(); // If using dotenv
+console.log('🚀 Starting bot... Node version:', process.version);
+console.log('🔑 Token loaded?', !!process.env.DISCORD_TOKEN ? 'YES' : 'NO (MISSING!)');
+console.log('Token preview (first 10 chars):', process.env.DISCORD_TOKEN?.slice(0, 10) + '...');
+
+// Your existing ping server code...
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => res.send('Bot alive!'));
+app.listen(process.env.PORT || 10000, '0.0.0.0', () => {
+  console.log('Ping server listening on port 10000'); // Your existing log
+});
+
+// Discord client setup
+const { Client, GatewayIntentBits } = require('discord.js');
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] // Add yours
+});
+
+client.on('ready', () => {
+  console.log(`✅ Bot ready! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
+});
+
+client.on('error', (err) => {
+  console.error('❌ Client error:', err.message || err);
+});
+
+client.ws.on('error', (err) => {
+  console.error('❌ WebSocket error:', err.message || err);
+});
+
+// Login with FAILSAFE logging
+console.log('🔄 Attempting Discord login...');
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log('🎉 Login promise resolved'))
+  .catch(err => {
+    console.error('💥 Login FAILED:', err.message || err);
+    process.exit(1); // Crash so Render restarts/logs it
+  });
+
 // --- Config ---
 const BOT_TOKEN = process.env.REVOLT_BOT_TOKEN;
 const WEBSITE_URL = 'https://majicbreaches.iceiy.com/';
