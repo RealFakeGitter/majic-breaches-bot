@@ -1,7 +1,7 @@
 require('dotenv').config();
-
 const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium'); // Import for executablePath
 const cheerio = require('cheerio');
 const express = require('express');
 
@@ -9,9 +9,8 @@ const express = require('express');
 console.log('🚀 Bot starting...');
 console.log('Node version:', process.version);
 console.log('🔑 DISCORD_BOT_TOKEN loaded?', !!process.env.DISCORD_BOT_TOKEN ? 'YES' : 'NO');
-if (process.env.DISCORD_BOT_TOKEN) {
-  console.log('Token preview:', process.env.DISCORD_BOT_TOKEN.slice(0, 10) + '...');
-} else {
+
+if (!process.env.DISCORD_BOT_TOKEN) {
   console.error('❌ MISSING TOKEN! Check Render env vars.');
   process.exit(1);
 }
@@ -33,11 +32,8 @@ const client = new Client({
   ]
 });
 
-// === Super Debug Listeners ===
-client.on('debug', (info) => {
-  console.log('[DEBUG]', info);  // This will show gateway identify, ratelimits, etc!
-});
-
+// === Debug Listeners ===
+client.on('debug', (info) => console.log('[DEBUG]', info));
 client.on('error', (err) => console.error('[CLIENT ERROR]', err));
 client.ws.on('open', () => console.log('[WS] Connection opened'));
 client.ws.on('close', (code, reason) => console.log('[WS] Closed:', code, reason || 'no reason'));
@@ -47,7 +43,7 @@ client.once('ready', () => {
   console.log(`✅ READY! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
 });
 
-// === Message Handler (unchanged) ===
+// === Message Handler ===
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!search')) return;
@@ -55,27 +51,39 @@ client.on('messageCreate', async (message) => {
   const query = message.content.substring(7).trim();
   if (!query) return message.reply('Provide a search term. E.g. `!search email@example.com`');
 
-  await message.reply(`Searching \`${query}\`...`);
+  await message.reply(`Searching for \`${query}\`... This may take a moment.`);
   console.log(`Search command: "${query}"`);
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    // Launch with @sparticuz/chromium (Render-friendly)
+    browser = await puppeteer.launch({
+      headless: chromium.headless,
+      executablePath: await chromium.executablePath(), // Critical: await this
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
+      ],
+    });
+
     const page = await browser.newPage();
     await page.goto('https://majicbreaches.iceiy.com/', { waitUntil: 'networkidle2' });
-
     await page.waitForSelector('#searchInput', { timeout: 10000 });
     await page.type('#searchInput', query);
     await page.keyboard.press('Enter');
-
     await page.waitForSelector('#results', { timeout: 15000 });
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise(r => setTimeout(r, 5000)); // Let results load
 
     const resultsHtml = await page.$eval('#results', el => el.innerHTML);
     console.log('Results parsed.');
 
     const embed = new EmbedBuilder()
-      .setTitle(`Majic Breaches Results`)
+      .setTitle('Majic Breaches Search Results')
       .setDescription(`For: \`${query}\``)
       .setColor('#00bfff');
 
@@ -83,6 +91,7 @@ client.on('messageCreate', async (message) => {
     const sections = $('.breach-section');
     let count = 0;
 
+    // Build preview fields (up to 10)
     sections.each((i, sec) => {
       if (count >= 10) return false;
       const dbName = $(sec).find('h2').first().text().trim();
@@ -90,26 +99,26 @@ client.on('messageCreate', async (message) => {
       const firstRow = $(sec).find('tbody tr').first();
 
       if (dbName && firstRow.length) {
-        const rowData = $(firstRow).find('td').map((_, el) => $(el).text().trim()).get().join(' | ');
+        const rowData = firstRow.find('td').map((_, el) => $(el).text().trim()).get().join(' | ');
         const cleanDesc = desc.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-
         let field = cleanDesc;
         if (rowData) field += `\n\n**Sample:**\n\`\`\`${rowData.substring(0, 900)}\`\`\``;
-
         embed.addFields({ name: `🔓 ${dbName}`, value: field.substring(0, 1024), inline: false });
         count++;
       }
     });
 
-    if (count === 0) embed.setDescription(`No results.`).setColor('#FF0000');
+    if (count === 0) {
+      embed.setDescription('No results found.').setColor('#FF0000');
+    }
 
+    // Build full TXT attachment if results exist
     if (count > 0) {
       let txt = `Results for ${query}\nGenerated: ${new Date().toLocaleString()}\n\n`;
       $('.breach-section').each((_, sec) => {
         const db = $(sec).find('h2').first().text().trim();
         const d = $(sec).find('p').first().text().trim();
         const rows = $(sec).find('tbody tr');
-
         txt += `--- ${db} ---\n${d}\n\n`;
         if (rows.length) {
           const headers = $(sec).find('thead th').map((_, el) => $(el).text().trim()).get();
@@ -118,7 +127,9 @@ client.on('messageCreate', async (message) => {
             const data = $(row).find('td').map((_, el) => $(el).text().trim()).get().join('\t');
             txt += data + '\n';
           });
-        } else txt += 'No data.\n';
+        } else {
+          txt += 'No data.\n';
+        }
         txt += '\n==================================================\n\n';
       });
 
@@ -132,19 +143,18 @@ client.on('messageCreate', async (message) => {
     }
   } catch (err) {
     console.error('!!! SEARCH ERROR !!!', err);
-    await message.reply('Search failed (site down or timeout?).');
+    await message.reply('Search failed (site may be down or timed out).');
   } finally {
     if (browser) await browser.close();
   }
 });
 
-// === Login with retry & debug ===
+// === Login with retry ===
 async function loginWithRetry(attempt = 1, maxAttempts = 3) {
   console.log(`[LOGIN] Attempt ${attempt}/${maxAttempts}...`);
-
   try {
     await client.login(process.env.DISCORD_BOT_TOKEN);
-    console.log('[LOGIN] Promise resolved');
+    console.log('[LOGIN] Success!');
   } catch (err) {
     console.error('[LOGIN FAIL]', err.message || err);
     if (attempt < maxAttempts) {
@@ -152,8 +162,8 @@ async function loginWithRetry(attempt = 1, maxAttempts = 3) {
       await new Promise(r => setTimeout(r, 10000));
       return loginWithRetry(attempt + 1, maxAttempts);
     } else {
-      console.error('[LOGIN] Max attempts reached. Giving up.');
-      process.exit(1);  // Crash so Render shows failed + logs everything
+      console.error('[LOGIN] Max attempts reached. Exiting.');
+      process.exit(1);
     }
   }
 }
