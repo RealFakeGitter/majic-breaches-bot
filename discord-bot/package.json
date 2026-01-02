@@ -4,17 +4,18 @@
   "description": "Discord bot for Majic Breaches search",
   "main": "index.js",
   "scripts": {
-  "start": "node index.js",
+    "start": "node index.js",
     "dev": "node index.js",
     "build": "echo 'No build step required'"
   },
   "dependencies": {
     "axios": "^1.13.2",
-     "cheerio": "^1.1.2",
-    "express": "5.2.1" ,
+    "cheerio": "^1.1.2",
+    "express": "5.2.1",
     "discord.js": "^14.25.1",
-      "dotenv": "^17.2.3" ,
-    "puppeteer": "^24.34.0"
+    "dotenv": "^17.2.3",
+    "puppeteer-core": "^24.34.0",
+    "@sparticuz/chromium": "^143.0.0"
   },
   "engines": {
     "node": ">=25.2.1"
