@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium'); // Import for executablePath
+const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
 const express = require('express');
 
@@ -23,6 +23,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Ping server on port ${PORT}`);
 });
 
+// === Deduplication Sets/Maps ===
+const processedMessageIds = new Set(); // Instant duplicates by message ID
+const lastCommandTime = new Map(); // Rate limit: userID_channelID → timestamp
+
 // === Client ===
 const client = new Client({
   intents: [
@@ -43,31 +47,45 @@ client.once('ready', () => {
   console.log(`✅ READY! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
 });
 
-// === Message Handler ===
+// === Message Handler with Deduplication ===
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!search')) return;
+
+  // --- Dedup 1: By message ID ---
+  if (processedMessageIds.has(message.id)) {
+    console.log(`Duplicate message ignored (ID: ${message.id})`);
+    return;
+  }
+  processedMessageIds.add(message.id);
+  setTimeout(() => processedMessageIds.delete(message.id), 120000); // Cleanup after 2 min
+
+  // --- Dedup 2: Rate limit per user per channel (60s) ---
+  const rateKey = `${message.author.id}_${message.channel.id}`;
+  const now = Date.now();
+  if (lastCommandTime.has(rateKey) && (now - lastCommandTime.get(rateKey) < 60000)) {
+    console.log(`Rate-limited duplicate from ${message.author.tag} in #${message.channel.name}`);
+    return;
+  }
+  lastCommandTime.set(rateKey, now);
 
   const query = message.content.substring(7).trim();
   if (!query) return message.reply('Provide a search term. E.g. `!search email@example.com`');
 
   await message.reply(`Searching for \`${query}\`... This may take a moment.`);
-  console.log(`Search command: "${query}"`);
+  console.log(`Search command: "${query}" from ${message.author.tag}`);
 
   let browser;
   try {
-    // Launch with @sparticuz/chromium (Render-friendly)
     browser = await puppeteer.launch({
       headless: chromium.headless,
-      executablePath: await chromium.executablePath(), // Critical: await this
+      executablePath: await chromium.executablePath(),
       args: [
         ...chromium.args,
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
+        '--disable-gpu'
       ],
     });
 
@@ -77,7 +95,7 @@ client.on('messageCreate', async (message) => {
     await page.type('#searchInput', query);
     await page.keyboard.press('Enter');
     await page.waitForSelector('#results', { timeout: 15000 });
-    await new Promise(r => setTimeout(r, 5000)); // Let results load
+    await new Promise(r => setTimeout(r, 5000));
 
     const resultsHtml = await page.$eval('#results', el => el.innerHTML);
     console.log('Results parsed.');
@@ -91,7 +109,6 @@ client.on('messageCreate', async (message) => {
     const sections = $('.breach-section');
     let count = 0;
 
-    // Build preview fields (up to 10)
     sections.each((i, sec) => {
       if (count >= 10) return false;
       const dbName = $(sec).find('h2').first().text().trim();
@@ -112,7 +129,6 @@ client.on('messageCreate', async (message) => {
       embed.setDescription('No results found.').setColor('#FF0000');
     }
 
-    // Build full TXT attachment if results exist
     if (count > 0) {
       let txt = `Results for ${query}\nGenerated: ${new Date().toLocaleString()}\n\n`;
       $('.breach-section').each((_, sec) => {
@@ -127,9 +143,7 @@ client.on('messageCreate', async (message) => {
             const data = $(row).find('td').map((_, el) => $(el).text().trim()).get().join('\t');
             txt += data + '\n';
           });
-        } else {
-          txt += 'No data.\n';
-        }
+        } else txt += 'No data.\n';
         txt += '\n==================================================\n\n';
       });
 
