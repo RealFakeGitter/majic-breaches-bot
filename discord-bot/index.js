@@ -23,9 +23,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Ping server on port ${PORT}`);
 });
 
-// === Deduplication Sets/Maps ===
-const processedMessageIds = new Set(); // Instant duplicates by message ID
-const lastCommandTime = new Map(); // Rate limit: userID_channelID → timestamp
+// === Deduplication ===
+const processedMessageIds = new Set();
+const lastCommandTime = new Map(); // userID_channelID → timestamp
 
 // === Client ===
 const client = new Client({
@@ -47,25 +47,31 @@ client.once('ready', () => {
   console.log(`✅ READY! Logged in as ${client.user.tag} | Guilds: ${client.guilds.cache.size}`);
 });
 
-// === Message Handler with Deduplication ===
+// === Message Handler ===
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith('!search')) return;
 
-  // --- Dedup 1: By message ID ---
+  // Dedup by message ID
   if (processedMessageIds.has(message.id)) {
-    console.log(`Duplicate message ignored (ID: ${message.id})`);
+    console.log(`Duplicate ignored (ID: ${message.id})`);
     return;
   }
   processedMessageIds.add(message.id);
-  setTimeout(() => processedMessageIds.delete(message.id), 120000); // Cleanup after 2 min
+  setTimeout(() => processedMessageIds.delete(message.id), 120000);
 
-  // --- Dedup 2: Rate limit per user per channel (60s) ---
   const rateKey = `${message.author.id}_${message.channel.id}`;
   const now = Date.now();
-  if (lastCommandTime.has(rateKey) && (now - lastCommandTime.get(rateKey) < 60000)) {
-    console.log(`Rate-limited duplicate from ${message.author.tag} in #${message.channel.name}`);
-    return;
+
+  // Rate limit + polite reply for near-duplicates
+  if (lastCommandTime.has(rateKey)) {
+    const timeSince = now - lastCommandTime.get(rateKey);
+    if (timeSince < 60000) {
+      console.log(`Rate-limited user ${message.author.tag} (${timeSince}ms ago)`);
+      message.reply('⏳ Chill! I\'m already searching or just finished. Wait a moment.')
+        .catch(() => {});
+      return;
+    }
   }
   lastCommandTime.set(rateKey, now);
 
